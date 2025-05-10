@@ -56,7 +56,8 @@ if st.session_state.court_allocations:
         c.drawString(200, 750, tournament_name)
         c.setFont("Helvetica", 12)
 
-        y_position = 730
+        y_position = 730  # Starting Y position for the first content
+
         # Court allocations
         for court, teams in court_allocations.items():
             c.drawString(50, y_position, court)
@@ -64,18 +65,18 @@ if st.session_state.court_allocations:
             for team in teams:
                 c.drawString(70, y_position, f"- {team}")
                 y_position -= 15
-            y_position -= 10
+            y_position -= 10  # Add some space after each court
 
         # Tournament rules
         if rules_html.strip():
-            c.showPage()
             c.setFont("Helvetica-Bold", 14)
-            c.drawString(50, 750, "Tournament Rules")
+            c.drawString(50, y_position, "Tournament Rules:")
+            y_position -= 20
             c.setFont("Helvetica", 12)
             for line in rules_html.splitlines():
                 c.drawString(50, y_position, line.strip())
                 y_position -= 15
-                if y_position < 100:
+                if y_position < 100:  # Prevent text from being printed too close to bottom
                     c.showPage()
                     y_position = 750
 
