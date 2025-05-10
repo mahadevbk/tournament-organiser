@@ -1,7 +1,9 @@
 import streamlit as st
 import random
 import math
-from fpdf import FPDF
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
 st.set_page_config(page_title="Dev's Easy Tournament Organiser", layout="wide")
 st.title("🎾 Dev's Easy Tournament Organiser")
@@ -48,43 +50,47 @@ if st.session_state.court_allocations:
 
     # --- PDF Download ---
     def generate_pdf(tournament_name, court_allocations, rules_html):
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(200, 10, txt=tournament_name, ln=True, align='C')
-        pdf.ln(10)
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(200, 750, tournament_name)
+        c.setFont("Helvetica", 12)
 
+        y_position = 730
         # Court allocations
         for court, teams in court_allocations.items():
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(200, 10, txt=court, ln=True)
-            pdf.set_font("Arial", "", 12)
+            c.drawString(50, y_position, court)
+            y_position -= 20
             for team in teams:
-                pdf.cell(200, 8, txt=f"  - {team}", ln=True)
-            pdf.ln(5)
+                c.drawString(70, y_position, f"- {team}")
+                y_position -= 15
+            y_position -= 10
 
         # Tournament rules
         if rules_html.strip():
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 14)
-            pdf.cell(200, 10, txt="Tournament Rules", ln=True)
-            pdf.set_font("Arial", "", 12)
-            # Replace HTML tags like <br> and &nbsp; for cleaner text
+            c.showPage()
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(50, 750, "Tournament Rules")
+            c.setFont("Helvetica", 12)
             for line in rules_html.splitlines():
-                clean_line = line.strip().replace('<br>', '').replace('&nbsp;', ' ')
-                pdf.multi_cell(0, 8, txt=clean_line, align='L')
+                c.drawString(50, y_position, line.strip())
+                y_position -= 15
+                if y_position < 100:
+                    c.showPage()
+                    y_position = 750
 
-        return pdf.output(dest='S').encode('latin-1')  # FPDF still outputs in Latin-1 encoding
+        c.save()
+        buffer.seek(0)
+        return buffer
 
-    pdf_bytes = generate_pdf(
+    pdf_buffer = generate_pdf(
         st.session_state.tournament_name,
         st.session_state.court_allocations,
         st.session_state.tournament_rules
     )
     st.download_button(
         label="📄 Download Tournament Schedule as PDF",
-        data=pdf_bytes,
+        data=pdf_buffer,
         file_name="tournament_schedule.pdf",
         mime="application/pdf"
     )
