@@ -2,7 +2,6 @@
 import streamlit as st
 import random
 import math
-from io import BytesIO
 from fpdf import FPDF
 
 st.set_page_config(page_title="Dev's Easy Tournament Organiser", layout="wide")
@@ -16,6 +15,8 @@ if 'court_allocations' not in st.session_state:
     st.session_state.court_allocations = {}
 if 'tournament_name' not in st.session_state:
     st.session_state.tournament_name = "Untitled Tournament"
+if 'tournament_rules' not in st.session_state:
+    st.session_state.tournament_rules = ""
 
 # Show tournament name and allocations
 if st.session_state.court_allocations:
@@ -41,8 +42,13 @@ if st.session_state.court_allocations:
                         st.markdown("_No teams assigned._")
     st.markdown("---")
 
+    # Display Tournament Rules if present
+    if st.session_state.tournament_rules.strip():
+        st.markdown("### 📘 Tournament Rules")
+        st.markdown(st.session_state.tournament_rules, unsafe_allow_html=True)
+
     # --- PDF Download ---
-    def generate_pdf(tournament_name, court_allocations):
+    def generate_pdf(tournament_name, court_allocations, rules_html):
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
@@ -58,9 +64,22 @@ if st.session_state.court_allocations:
                 pdf.cell(200, 8, txt=f"  - {team}", ln=True)
             pdf.ln(5)
 
+        if rules_html.strip():
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(200, 10, txt="Tournament Rules", ln=True)
+            pdf.set_font("Arial", "", 12)
+            for line in rules_html.splitlines():
+                clean_line = line.strip().replace('<br>', '').replace('&nbsp;', ' ')
+                pdf.multi_cell(0, 8, txt=clean_line, align='L')
+
         return pdf.output(dest='S').encode('latin-1')
 
-    pdf_bytes = generate_pdf(st.session_state.tournament_name, st.session_state.court_allocations)
+    pdf_bytes = generate_pdf(
+        st.session_state.tournament_name,
+        st.session_state.court_allocations,
+        st.session_state.tournament_rules
+    )
     st.download_button(
         label="📄 Download Tournament Schedule as PDF",
         data=pdf_bytes,
@@ -94,11 +113,14 @@ with st.form("tournament_form"):
     else:
         st.warning("⚠️ Odd number of teams detected. Please add one more team for even distribution.")
 
+    rules = st.text_area("📘 Optional: Paste Tournament Rules (rich text supported)", height=200)
+
     submit = st.form_submit_button("🎲 Organise Tournament")
 
 # Process logic
 if submit and num_teams % 2 == 0:
     st.session_state.tournament_name = tournament_name.strip() or "Untitled Tournament"
+    st.session_state.tournament_rules = rules
     random.shuffle(team_names)
     base = num_teams // num_courts
     remainder = num_teams % num_courts
