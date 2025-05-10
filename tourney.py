@@ -60,7 +60,9 @@ if st.button("Organise Tournament"):
     st.markdown("---")
     st.subheader("Court Assignments")
 
-    # Dynamic court layout with styled boxes
+    # Dynamic court layout with styled boxes matching config.toml primary color
+    primary_color = "#f63366"  # Default Streamlit pink; replace with your config.toml primary color
+
     if len(courts) <= 4:
         num_cols = len(courts)
     elif len(courts) <= 8:
@@ -77,9 +79,9 @@ if st.button("Organise Tournament"):
                 court_name, teams = court
                 st.markdown(
                     f"""
-                    <div style='border: 2px solid #4CAF50; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: #f9f9f9;'>
+                    <div style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: #fff7fa;'>
                         <img src='court.png' width='100%' style='border-radius: 8px;' />
-                        <h4 style='text-align:center; color:#2E8B57;'>{court_name}</h4>
+                        <h4 style='text-align:center; color:{primary_color};'>{court_name}</h4>
                         <ul>{''.join(f'<li><b>{team}</b></li>' for team in teams)}</ul>
                     </div>
                     """,
