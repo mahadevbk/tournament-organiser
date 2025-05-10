@@ -148,3 +148,5 @@ if st.button("Organise Tournament"):
         'Tennis icons created by Smashicons - Flaticon</a></small>',
         unsafe_allow_html=True
     )
+
+st.info("Built with ❤️ using [Streamlit](https://streamlit.io/) — free and open source. [Other Scripts by dev](https://devs-scripts.streamlit.app/) on Streamlit.")
