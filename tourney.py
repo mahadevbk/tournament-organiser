@@ -1,4 +1,3 @@
-
 import streamlit as st
 import random
 import math
@@ -56,6 +55,7 @@ if st.session_state.court_allocations:
         pdf.cell(200, 10, txt=tournament_name, ln=True, align='C')
         pdf.ln(10)
 
+        # Court allocations
         for court, teams in court_allocations.items():
             pdf.set_font("Arial", "B", 12)
             pdf.cell(200, 10, txt=court, ln=True)
@@ -64,16 +64,18 @@ if st.session_state.court_allocations:
                 pdf.cell(200, 8, txt=f"  - {team}", ln=True)
             pdf.ln(5)
 
+        # Tournament rules
         if rules_html.strip():
             pdf.add_page()
             pdf.set_font("Arial", "B", 14)
             pdf.cell(200, 10, txt="Tournament Rules", ln=True)
             pdf.set_font("Arial", "", 12)
+            # Replace HTML tags like <br> and &nbsp; for cleaner text
             for line in rules_html.splitlines():
                 clean_line = line.strip().replace('<br>', '').replace('&nbsp;', ' ')
                 pdf.multi_cell(0, 8, txt=clean_line, align='L')
 
-        return pdf.output(dest='S').encode('latin-1')
+        return pdf.output(dest='S').encode('latin-1')  # FPDF still outputs in Latin-1 encoding
 
     pdf_bytes = generate_pdf(
         st.session_state.tournament_name,
