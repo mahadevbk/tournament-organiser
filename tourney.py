@@ -55,4 +55,4 @@ if submit and num_teams % 2 == 0:
         idx += count
 
     st.session_state.court_allocations = court_allocations
-    st.experimental_rerun()  # Refresh to show output at top
+    st.rerun()  # Refresh to show output at top
