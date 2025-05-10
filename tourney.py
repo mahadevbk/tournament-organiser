@@ -42,7 +42,7 @@ with st.form("tournament_form"):
 
     # Ask if user wants to enter custom team names
     use_custom_names = st.radio(
-        "Do you want to enter custom team names?",
+        "Do you want to enter names for each team ?  (Default is Team 1, Team 2 etc. ) ",
         options=["No", "Yes"],
         horizontal=True,
     )
