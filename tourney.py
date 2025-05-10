@@ -1,6 +1,8 @@
 import streamlit as st
 import random
 import math
+from io import BytesIO
+from fpdf import FPDF
 
 st.set_page_config(page_title="Dev's Easy Tournament Organiser", layout="wide")
 st.title("🎾 Dev's Easy Tournament Organiser")
@@ -8,13 +10,17 @@ st.title("🎾 Dev's Easy Tournament Organiser")
 # 🔔 Info about randomisation
 st.info("📢 Teams are randomly assigned to courts to ensure fairness.")
 
-# Session state to store final allocation
+# Session state
 if 'court_allocations' not in st.session_state:
     st.session_state.court_allocations = {}
+if 'tournament_name' not in st.session_state:
+    st.session_state.tournament_name = "Untitled Tournament"
 
-# Show allocations at the top in grid/table format
+# Show tournament name and allocations
 if st.session_state.court_allocations:
+    st.markdown(f"### 🏆 {st.session_state.tournament_name}")
     st.markdown("### 🏟️ Court Allocations")
+
     courts = list(st.session_state.court_allocations.items())
     num_cols = 4
     num_rows = math.ceil(len(courts) / num_cols)
@@ -34,15 +40,45 @@ if st.session_state.court_allocations:
                         st.markdown("_No teams assigned._")
     st.markdown("---")
 
+    # --- PDF Download ---
+    def generate_pdf(tournament_name, court_allocations):
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(200, 10, txt=tournament_name, ln=True, align='C')
+        pdf.ln(10)
+
+        for court, teams in court_allocations.items():
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(200, 10, txt=court, ln=True)
+            pdf.set_font("Arial", "", 12)
+            for team in teams:
+                pdf.cell(200, 8, txt=f"  - {team}", ln=True)
+            pdf.ln(5)
+
+        output = BytesIO()
+        pdf.output(output)
+        return output.getvalue()
+
+    pdf_bytes = generate_pdf(st.session_state.tournament_name, st.session_state.court_allocations)
+    st.download_button(
+        label="📄 Download Tournament Schedule as PDF",
+        data=pdf_bytes,
+        file_name="tournament_schedule.pdf",
+        mime="application/pdf"
+    )
+
 # Setup form
 with st.form("tournament_form"):
     st.subheader("📝 Tournament Setup")
+
+    tournament_name = st.text_input("Enter Tournament Name", value=st.session_state.tournament_name)
     num_teams = st.number_input("Number of Teams", min_value=2, step=1)
     num_courts = st.number_input("Number of Courts", min_value=1, step=1)
 
-    # Ask if user wants to enter custom team names
     use_custom_names = st.radio(
-        "Do you want to enter names for each team ?  (Default is Team 1, Team 2 etc. ) ",
+        "Do you want to enter custom team names?",
         options=["No", "Yes"],
         horizontal=True,
     )
@@ -61,8 +97,9 @@ with st.form("tournament_form"):
 
     submit = st.form_submit_button("🎲 Organise Tournament")
 
-# Process tournament
+# Process logic
 if submit and num_teams % 2 == 0:
+    st.session_state.tournament_name = tournament_name.strip() or "Untitled Tournament"
     random.shuffle(team_names)
     base = num_teams // num_courts
     remainder = num_teams % num_courts
