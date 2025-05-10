@@ -146,3 +146,6 @@ if submit and num_teams % 2 == 0:
 
     st.session_state.court_allocations = court_allocations
     st.rerun()
+
+
+st.info("Built with ❤️ using [Streamlit](https://streamlit.io/) — free and open source. [Other Scripts by dev](https://devs-scripts.streamlit.app/) on Streamlit.")
