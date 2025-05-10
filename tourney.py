@@ -84,6 +84,7 @@ if st.session_state.court_allocations:
         buffer.seek(0)
         return buffer
 
+    # Use the tournament name for the PDF filename
     pdf_buffer = generate_pdf(
         st.session_state.tournament_name,
         st.session_state.court_allocations,
@@ -92,7 +93,7 @@ if st.session_state.court_allocations:
     st.download_button(
         label="📄 Download Tournament Schedule as PDF",
         data=pdf_buffer,
-        file_name="tournament_schedule.pdf",
+        file_name=f"{st.session_state.tournament_name.replace(' ', '_')}_schedule.pdf",  # Use tournament name as filename
         mime="application/pdf"
     )
 
