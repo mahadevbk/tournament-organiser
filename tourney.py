@@ -1,3 +1,4 @@
+
 import streamlit as st
 import random
 import math
@@ -57,9 +58,7 @@ if st.session_state.court_allocations:
                 pdf.cell(200, 8, txt=f"  - {team}", ln=True)
             pdf.ln(5)
 
-        output = BytesIO()
-        pdf.output(output)
-        return output.getvalue()
+        return pdf.output(dest='S').encode('latin-1')
 
     pdf_bytes = generate_pdf(st.session_state.tournament_name, st.session_state.court_allocations)
     st.download_button(
