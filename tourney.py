@@ -1,7 +1,8 @@
 import streamlit as st
 import random
+import math
 
-st.set_page_config(page_title="Dev's Easy Tournament Organiser", layout="centered")
+st.set_page_config(page_title="Dev's Easy Tournament Organiser", layout="wide")
 st.title("🎾 Dev's Easy Tournament Organiser")
 
 # 🔔 Info about randomisation
@@ -11,16 +12,26 @@ st.info("📢 Teams are randomly assigned to courts to ensure fairness.")
 if 'court_allocations' not in st.session_state:
     st.session_state.court_allocations = {}
 
-# Show allocations at the top
+# Show allocations at the top in grid/table format
 if st.session_state.court_allocations:
     st.markdown("### 🏟️ Court Allocations")
-    for court, teams in st.session_state.court_allocations.items():
-        with st.container():
-            st.markdown(f"#### {court}")
-            for team in teams:
-                st.markdown(f"- 🎽 **{team}**")
-            if not teams:
-                st.markdown("_No teams assigned._")
+    courts = list(st.session_state.court_allocations.items())
+    num_cols = 4
+    num_rows = math.ceil(len(courts) / num_cols)
+
+    for i in range(num_rows):
+        cols = st.columns(num_cols)
+        for j in range(num_cols):
+            idx = i * num_cols + j
+            if idx < len(courts):
+                court_name, teams = courts[idx]
+                with cols[j]:
+                    st.markdown(f"#### {court_name}")
+                    if teams:
+                        for team in teams:
+                            st.markdown(f"- 🎽 **{team}**")
+                    else:
+                        st.markdown("_No teams assigned._")
     st.markdown("---")
 
 # Setup form
@@ -60,7 +71,6 @@ if submit and num_teams % 2 == 0:
     idx = 0
     for i in range(num_courts):
         count = base + (1 if i < remainder else 0)
-        # Ensure even number of teams per court
         if count % 2 != 0:
             count -= 1
         court_allocations[f"Court {i+1}"] = team_names[idx:idx+count]
