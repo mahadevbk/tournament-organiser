@@ -142,9 +142,6 @@ if st.button("Organise Tournament"):
         mime='application/pdf'
     )
 
-    # Attribution
-    st.markdown(
-        '<small><a href="https://www.flaticon.com/free-icons/tennis" target="_blank">'
-        'Tennis icons created by Smashicons - Flaticon</a></small>',
-        unsafe_allow_html=True
-    )
+
+st.markdown("----")
+st.info("Built with ❤️ using [Streamlit](https://streamlit.io/) — free and open source. [Other Scripts by dev](https://devs-scripts.streamlit.app/) on Streamlit.")
