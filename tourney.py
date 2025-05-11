@@ -27,26 +27,15 @@ if num_teams and enter_names == "Yes":
     else:
         cols = st.columns(4)
 
+    temp_names = {}
     for i in range(num_teams):
         col = cols[i % len(cols)]
         with col:
             name = st.text_input(f"Team {i+1} Name", key=f"team_{i}")
-            team_names.append(name if name else f"Team {i+1}")
+            temp_names[i] = name if name else f"Team {i+1}"
+    team_names = [temp_names[i] for i in sorted(temp_names)]
 else:
     team_names = [f"Team {i+1}" for i in range(num_teams)]
-
-# Collect court names if enabled
-court_names = []
-if num_courts and edit_court_names == "Yes":
-    st.subheader("Enter Court Names")
-    cols = st.columns(2 if num_courts <= 8 else 3)
-    for i in range(num_courts):
-        col = cols[i % len(cols)]
-        with col:
-            name = st.text_input(f"Court {i+1} Name", key=f"court_{i}")
-            court_names.append(name if name else f"Court {i+1}")
-else:
-    court_names = [f"Court {i+1}" for i in range(num_courts)]
 
 # Optional tournament rules input
 rules = st.text_area("Enter Tournament Rules (optional, supports rich text)")
@@ -68,7 +57,9 @@ if st.button("Organise Tournament"):
             if i < num_courts - 1:
                 num += 1
         court_teams = team_names[idx:idx+num]
-        courts.append((court_names[i], court_teams))
+        default_name = f"Court {i+1}"
+        court_name = st.text_input(f"Enter name for Court {i+1}", value=default_name, key=f"court_{i}") if edit_court_names == "Yes" else default_name
+        courts.append((court_name, court_teams))
         idx += num
 
     st.markdown("---")
@@ -148,5 +139,3 @@ if st.button("Organise Tournament"):
         'Tennis icons created by Smashicons - Flaticon</a></small>',
         unsafe_allow_html=True
     )
-
-st.info("Built with ❤️ using [Streamlit](https://streamlit.io/) — free and open source. [Other Scripts by dev](https://devs-scripts.streamlit.app/) on Streamlit.")
