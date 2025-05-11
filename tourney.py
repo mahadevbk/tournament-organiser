@@ -14,7 +14,7 @@ tournament_name = st.text_input("Enter Tournament Name")
 num_teams = st.number_input("Enter number of teams", min_value=2, step=1)
 num_courts = st.number_input("Enter number of courts", min_value=1, step=1)
 enter_names = st.radio("Do you want to enter team names?", ("No", "Yes"))
-edit_court_names = st.radio("Do you want to edit court names?", ("No", "Yes"))
+enter_court_names = st.radio("Do you want to enter court names?", ("No", "Yes"))
 
 # Collect team names early, depending on radio selection
 team_names = []
@@ -27,15 +27,26 @@ if num_teams and enter_names == "Yes":
     else:
         cols = st.columns(4)
 
-    temp_names = {}
     for i in range(num_teams):
         col = cols[i % len(cols)]
         with col:
             name = st.text_input(f"Team {i+1} Name", key=f"team_{i}")
-            temp_names[i] = name if name else f"Team {i+1}"
-    team_names = [temp_names[i] for i in sorted(temp_names)]
+            team_names.append(name if name else f"Team {i+1}")
 else:
     team_names = [f"Team {i+1}" for i in range(num_teams)]
+
+# Optional court names
+court_names = []
+if num_courts and enter_court_names == "Yes":
+    st.subheader("Enter Court Names")
+    for i in range(num_courts):
+        key = f"court_name_{i}"
+        if key not in st.session_state:
+            st.session_state[key] = f"Court {i+1}"
+        name = st.text_input(f"Court {i+1} Name", key=key)
+        court_names.append(name)
+else:
+    court_names = [f"Court {i+1}" for i in range(num_courts)]
 
 # Optional tournament rules input
 rules = st.text_area("Enter Tournament Rules (optional, supports rich text)")
@@ -57,9 +68,7 @@ if st.button("Organise Tournament"):
             if i < num_courts - 1:
                 num += 1
         court_teams = team_names[idx:idx+num]
-        default_name = f"Court {i+1}"
-        court_name = st.text_input(f"Enter name for Court {i+1}", value=default_name, key=f"court_{i}") if edit_court_names == "Yes" else default_name
-        courts.append((court_name, court_teams))
+        courts.append((court_names[i], court_teams))
         idx += num
 
     st.markdown("---")
