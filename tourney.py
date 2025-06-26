@@ -133,37 +133,38 @@ if st.button("Organise Tournament"):
             playoff_matches.append(("Finals", [(winners[0], winners[1])]))
         else:
             # Calculate the number of teams needed for the first full round (power of 2)
-            target_teams = 2 ** math.floor(math.log2(num_winners))
-            if target_teams < 2:
-                target_teams = 2
-            byes = target_teams - (num_winners if num_winners <= target_teams else num_winners - target_teams)
+            target_teams = 2 ** math.ceil(math.log2(num_winners))
+            byes = target_teams - num_winners
             current_teams = winners.copy()
+            round_num = 1
 
             # First Round (if needed)
-            if num_winners > target_teams:
+            if byes > 0:
                 first_round = []
-                # Pair up teams for matches
-                matches_needed = num_winners - target_teams
+                matches_needed = (num_winners - byes) // 2
                 for i in range(0, matches_needed * 2, 2):
                     first_round.append((current_teams[i], current_teams[i+1]))
-                # Assign byes
                 for i in range(matches_needed * 2, num_winners):
                     first_round.append((current_teams[i], "Bye"))
-                playoff_matches.append(("First Round", first_round))
+                random.shuffle(first_round)
+                if first_round:
+                    playoff_matches.append(("First Round", first_round))
                 current_teams = [f"Winner of R1M{i+1}" if t1 != "Bye" else t2 for i, (t1, t2) in enumerate(first_round)]
                 random.shuffle(current_teams)
 
             # Subsequent rounds
-            round_num = 1 if playoff_matches else 0
             while len(current_teams) > 1:
                 round_name = "Finals" if len(current_teams) == 2 else (
-                    "Semi-Finals" if len(current_teams) == 4 else (
+                    "Semi-Finals" if len(current_teams) <= 4 else (
                         "Quarter-Finals" if len(current_teams) <= 8 else f"Round {round_num}"
                     )
                 )
-                matches = [(current_teams[i], current_teams[i+1]) for i in range(0, len(current_teams) - (len(current_teams) % 2), 2)]
+                matches = []
+                for i in range(0, len(current_teams) - (len(current_teams) % 2), 2):
+                    matches.append((current_teams[i], current_teams[i+1]))
                 if len(current_teams) % 2 == 1 and len(current_teams) > 2:
                     matches.append((current_teams[-1], "Bye"))
+                random.shuffle(matches)
                 playoff_matches.append((round_name, matches))
                 current_teams = [f"Winner of {round_name[:2]}M{i+1}" if t1 != "Bye" else t2 for i, (t1, t2) in enumerate(matches)]
                 random.shuffle(current_teams)
