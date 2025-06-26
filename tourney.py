@@ -128,39 +128,47 @@ if st.button("Organise Tournament"):
     num_winners = len(winners)
     
     if num_winners > 1:
-        # Calculate rounds needed
-        rounds_needed = math.ceil(math.log2(num_winners))
-        current_teams = winners.copy()
-        
-        # Handle initial byes if num_winners is not a power of 2
-        if num_winners not in [2, 4, 8, 16, 32]:
-            first_round_teams = 2 ** math.ceil(math.log2(num_winners))
-            byes = first_round_teams - num_winners
-            first_round = []
-            advancing_teams = current_teams[:num_winners - byes]
-            for i in range(byes):
-                first_round.append((current_teams[num_winners - byes + i], "Bye"))
-                advancing_teams.append(current_teams[num_winners - byes + i])
-            if advancing_teams:
-                first_round.extend([(advancing_teams[i], advancing_teams[i+1]) for i in range(0, len(advancing_teams) - (len(advancing_teams) % 2), 2)])
-                if len(advancing_teams) % 2 == 1:
-                    first_round.append((advancing_teams[-1], "Bye"))
-            if first_round:
-                playoff_matches.append(("First Round", first_round))
-            current_teams = [f"Winner of R1M{i+1}" if t1 != "Bye" else t2 for t1, t2 in first_round]
-            random.shuffle(current_teams)
+        # For exactly 2 courts, go straight to finals
+        if num_winners == 2:
+            playoff_matches.append(("Finals", [(winners[0], winners[1])]))
+        else:
+            # Calculate rounds needed
+            rounds_needed = math.ceil(math.log2(num_winners))
+            current_teams = winners.copy()
+            
+            # Handle initial byes if num_winners is not a power of 2
+            if num_winners not in [2, 4, 8, 16, 32]:
+                first_round_teams = 2 ** math.ceil(math.log2(num_winners))
+                byes = first_round_teams - num_winners
+                first_round = []
+                advancing_teams = current_teams[:num_winners - byes]
+                for i in range(byes):
+                    first_round.append((current_teams[num_winners - byes + i], "Bye"))
+                    advancing_teams.append(current_teams[num_winners - byes + i])
+                if advancing_teams:
+                    first_round.extend([(advancing_teams[i], advancing_teams[i+1]) for i in range(0, len(advancing_teams) - (len(advancing_teams) % 2), 2)])
+                    if len(advancing_teams) % 2 == 1:
+                        first_round.append((advancing_teams[-1], "Bye"))
+                if first_round:
+                    playoff_matches.append(("First Round", first_round))
+                current_teams = [f"Winner of R1M{i+1}" if t1 != "Bye" else t2 for t1, t2 in first_round]
+                random.shuffle(current_teams)
 
-        # Generate subsequent rounds
-        round_num = 1 if playoff_matches else 0
-        while len(current_teams) > 1:
-            round_name = "Finals" if len(current_teams) == 2 else f"{'Quarter-Finals' if len(current_teams) <= 8 else 'Round ' + str(round_num)}"
-            matches = [(current_teams[i], current_teams[i+1]) for i in range(0, len(current_teams) - (len(current_teams) % 2), 2)]
-            if len(current_teams) % 2 == 1:
-                matches.append((current_teams[-1], "Bye"))
-            playoff_matches.append((round_name, matches))
-            current_teams = [f"Winner of {round_name[:2]}M{i+1}" if t1 != "Bye" else t2 for i, (t1, t2) in enumerate(matches)]
-            random.shuffle(current_teams)
-            round_num += 1
+            # Generate subsequent rounds
+            round_num = 1 if playoff_matches else 0
+            while len(current_teams) > 1:
+                round_name = "Finals" if len(current_teams) == 2 else (
+                    "Semi-Finals" if len(current_teams) == 4 else (
+                        "Quarter-Finals" if len(current_teams) <= 8 else f"Round {round_num}"
+                    )
+                )
+                matches = [(current_teams[i], current_teams[i+1]) for i in range(0, len(current_teams) - (len(current_teams) % 2), 2)]
+                if len(current_teams) % 2 == 1 and len(current_teams) > 2:
+                    matches.append((current_teams[-1], "Bye"))
+                playoff_matches.append((round_name, matches))
+                current_teams = [f"Winner of {round_name[:2]}M{i+1}" if t1 != "Bye" else t2 for i, (t1, t2) in enumerate(matches)]
+                random.shuffle(current_teams)
+                round_num += 1
 
     # Display playoff matches
     for round_name, matches in playoff_matches:
@@ -170,7 +178,7 @@ if st.button("Organise Tournament"):
             with cols[idx % len(cols)]:
                 st.markdown(
                     f"""
-                    <div style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: white; color: black;'>
+                    <div style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: {primary_color}; color: white;'>
                         <h5>{round_name} Match {idx+1}</h5>
                         <p>{team1} vs {team2}</p>
                     </div>
