@@ -45,7 +45,7 @@ if num_courts and enter_court_names == "Yes":
         if key not in st.session_state:
             st.session_state[key] = f"Court {i+1}"
         name = st.text_input(f"Court {i+1} Name", key=key)
-        court_names.append(name)
+        court_names.append(name if name else f"Court {i+1}")
 else:
     court_names = [f"Court {i+1}" for i in range(num_courts)]
 
@@ -74,8 +74,11 @@ if st.button("Organise Tournament"):
     # Generate randomized order of play for each court
     court_matches = []
     for court_name, teams in courts:
-        matches = list(itertools.combinations(teams, 2))
-        random.shuffle(matches)
+        if len(teams) >= 2:
+            matches = list(itertools.combinations(teams, 2))
+            random.shuffle(matches)
+        else:
+            matches = []
         court_matches.append((court_name, matches))
 
     st.markdown("---")
@@ -98,16 +101,16 @@ if st.button("Organise Tournament"):
         for j, (court_name, teams) in enumerate(courts[i:i + num_cols]):
             with row[j]:
                 matches = next((m for c, m in court_matches if c == court_name), [])
-                match_list = ''.join(f'<li><b>{t1}</b> vs <b>{t2}</b></li>' for t1, t2 in matches)
+                match_list = ''.join(f'<li>{t1} vs {t2}</li>' for t1, t2 in matches) if matches else '<li>No matches (insufficient teams)</li>'
                 st.markdown(
                     f"""
                     <div style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: {primary_color}; color: white;'>
                         <img src='court.png' width='100%' style='border-radius: 8px;' />
                         <h4 style='text-align:center; color:white;'>{court_name}</h4>
                         <h5>Teams:</h5>
-                        <ul>{''.join(f'<li><b>{team}</b></li>' for team in teams)}</ul>
+                        <ul>{''.join(f'<li>{team}</li>' for team in teams)}</ul>
                         <h5>Match Schedule:</h5>
-                        <ul>{match_list if match_list else '<li>No matches scheduled</li>'}</ul>
+                        <ul>{match_list}</ul>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -151,7 +154,7 @@ if st.button("Organise Tournament"):
                     f"""
                     <div style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: white; color: black;'>
                         <h5>{round_name} Match {idx+1}</h5>
-                        <p><b>{team1}</b> vs <b>{team2}</b></p>
+                        <p>{team1} vs {team2}</p>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -188,6 +191,9 @@ if st.button("Organise Tournament"):
                 for t1, t2 in matches:
                     pdf.cell(20)
                     pdf.cell(0, 10, f"- {t1} vs {t2}", ln=True)
+            else:
+                pdf.cell(20)
+                pdf.cell(0, 10, "- No matches (insufficient teams)", ln=True)
             pdf.ln(2)
 
         pdf.ln(5)
