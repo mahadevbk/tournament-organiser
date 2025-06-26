@@ -64,11 +64,12 @@ if st.button("Organise Tournament"):
     remainder = num_teams % num_courts
     courts = []
     idx = 0
-    for i in range(num_courts):
+    for i in range(min(num_courts, num_teams)):
         num = base + (1 if i < remainder else 0)
         court_teams = team_names[idx:idx+num] if num > 0 else []
         if court_teams:
-            courts.append((court_names[i], court_teams))
+            court_idx = i % len(court_names)  # Ensure we use available court names
+            courts.append((court_names[court_idx], court_teams))
         idx += num
 
     # Generate randomized order of play for each court
@@ -131,14 +132,15 @@ if st.button("Organise Tournament"):
             # Directly to Finals for 2 courts
             playoff_matches.append(("Finals", [(winners[0], winners[1])]))
         else:
-            # Calculate the number of teams needed for the first full round (power of 2)
-            target_teams = 2 ** math.ceil(math.log2(num_winners))
-            byes = target_teams - num_winners if num_winners < target_teams else 0
+            # Check if num_winners is a power of 2
+            is_power_of_2 = num_winners > 0 and (num_winners & (num_winners - 1)) == 0
             current_teams = winners.copy()
             round_num = 1
 
-            # First Round (if needed, for non-power-of-2)
-            if byes > 0:
+            # First Round (if num_winners is not a power of 2)
+            if not is_power_of_2:
+                target_teams = 2 ** math.ceil(math.log2(num_winners))
+                byes = target_teams - num_winners
                 first_round = []
                 matches_needed = (num_winners - byes) // 2
                 for i in range(0, matches_needed * 2, 2):
@@ -187,7 +189,7 @@ if st.button("Organise Tournament"):
 
     if rules:
         st.subheader("Tournament Rules")
-        st.markdown(rules, unsafe_allow_html=True)
+        stnell=True)
 
     # PDF Generation
     def generate_pdf(tournament_name, courts, court_matches, playoff_matches, rules):
@@ -206,6 +208,49 @@ if st.button("Organise Tournament"):
             pdf.set_text_color(0, 0, 0)
             pdf.cell(10)
             pdf.cell(0, 10, "Teams:", ln=True)
-            for team in teamswater
+            for team in teams:
+                pdf.cell(20)
+                pdf.cell(0, 10, f"- {team}", ln=True)
+            matches = next((m for c, m in court_matches if c == court_name), [])
+            if matches:
+                pdf.cell(10)
+                pdf.cell(0, 10, "Match Schedule:", ln=True)
+                for t1, t2 in matches:
+                    pdf.cell(20)
+                    pdf.cell(0, 10, f"- {t1} vs {t2}", ln=True)
+            else:
+                pdf.cell(20)
+                pdf.cell(0, 10, "- No matches (insufficient teams)", ln=True)
+            pdf.ln(2)
 
-System: * Today's date and time is 02:06 PM +04 on Thursday, June 26, 2025.
+        pdf.ln(5)
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "Playoff Bracket", ln=True)
+        pdf.set_font("Arial", '', 12)
+        for round_name, matches in playoff_matches:
+            pdf.cell(0, 10, round_name, ln=True)
+            for idx, (t1, t2) in enumerate(matches):
+                pdf.cell(10)
+                pdf.cell(0, 10, f"Match {idx+1}: {t1} vs {t2}", ln=True)
+            pdf.ln(2)
+
+        if rules:
+            pdf.ln(5)
+            pdf.set_font("Arial", 'B', 14)
+            pdf.cell(0, 10, "Tournament Rules", ln=True)
+            pdf.set_font("Arial", '', 11)
+            for line in rules.splitlines():
+                pdf.multi_cell(0, 8, line)
+
+        return pdf.output(dest='S').encode('latin-1')
+
+    pdf_bytes = generate_pdf(tournament_name, courts, court_matches, playoff_matches, rules)
+    st.download_button(
+        label="Download PDF",
+        data=pdf_bytes,
+        file_name=f"{tournament_name or 'tournament'}.pdf",
+        mime='application/pdf'
+    )
+
+st.markdown("----")
+st.info("Built with ❤️ using [Streamlit](https://streamlit.io/) — free and open source. [Other Scripts by dev](https://devs-scripts.streamlit.app/) on Streamlit.")
