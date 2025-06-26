@@ -8,7 +8,7 @@ import math
 st.set_page_config(page_title="Dev's Easy Tournament Organiser", page_icon="court.png")
 
 st.title("Dev's Easy Tournament Organiser 🎾")
-st.markdown("<small><i>Assignments of teams and courts are done randomly. Matches within courts and playoffs are randomized.</i></small>", unsafe_allow_html=True)
+st.markdown("<small><i>Assignments of teams and courts are done randomly. Matches within courts and playoffs are randomized, with no team playing more than two consecutive matches.</i></small>", unsafe_allow_html=True)
 
 # Input fields
 st.subheader("Tournament Setup")
@@ -56,6 +56,39 @@ rules = st.text_area("Enter Tournament Rules (optional, supports rich text)")
 if num_teams % 2 != 0:
     st.warning("Number of teams is odd. Consider adding one more team for even distribution.")
 
+def schedule_matches(teams):
+    if len(teams) < 2:
+        return []
+    matches = list(itertools.combinations(teams, 2))
+    random.shuffle(matches)
+    scheduled = []
+    team_consecutive = {team: 0 for team in teams}
+    remaining_matches = matches.copy()
+
+    while remaining_matches:
+        added = False
+        for match in remaining_matches[:]:
+            team1, team2 = match
+            if team_consecutive[team1] < 2 and team_consecutive[team2] < 2:
+                scheduled.append(match)
+                remaining_matches.remove(match)
+                team_consecutive[team1] += 1
+                team_consecutive[team2] += 1
+                # Reset consecutive count for teams not in this match
+                for team in teams:
+                    if team not in (team1, team2):
+                        team_consecutive[team] = 0
+                added = True
+                break
+        if not added:
+            # If no match can be added without breaking the rule, shuffle and try again
+            random.shuffle(remaining_matches)
+            # Reset consecutive counts to try a new order
+            team_consecutive = {team: 0 for team in teams}
+            scheduled = []
+            remaining_matches = matches.copy()
+    return scheduled
+
 if st.button("Organise Tournament"):
     random.shuffle(team_names)
 
@@ -72,14 +105,10 @@ if st.button("Organise Tournament"):
             courts.append((court_names[court_idx], court_teams))
         idx += num
 
-    # Generate randomized order of play for each court
+    # Generate randomized order of play for each court with no team playing more than 2 consecutive matches
     court_matches = []
     for court_name, teams in courts:
-        if len(teams) >= 2:
-            matches = list(itertools.combinations(teams, 2))
-            random.shuffle(matches)
-        else:
-            matches = []
+        matches = schedule_matches(teams)
         court_matches.append((court_name, matches))
 
     st.markdown("---")
