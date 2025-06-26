@@ -128,33 +128,32 @@ if st.button("Organise Tournament"):
     num_winners = len(winners)
     
     if num_winners > 1:
-        # For exactly 2 courts, go straight to finals
         if num_winners == 2:
+            # Directly to Finals for 2 courts
             playoff_matches.append(("Finals", [(winners[0], winners[1])]))
         else:
-            # Calculate rounds needed
-            rounds_needed = math.ceil(math.log2(num_winners))
+            # Calculate the number of teams needed for the first full round (power of 2)
+            target_teams = 2 ** math.floor(math.log2(num_winners))
+            if target_teams < 2:
+                target_teams = 2
+            byes = target_teams - (num_winners if num_winners <= target_teams else num_winners - target_teams)
             current_teams = winners.copy()
-            
-            # Handle initial byes if num_winners is not a power of 2
-            if num_winners not in [2, 4, 8, 16, 32]:
-                first_round_teams = 2 ** math.ceil(math.log2(num_winners))
-                byes = first_round_teams - num_winners
+
+            # First Round (if needed)
+            if num_winners > target_teams:
                 first_round = []
-                advancing_teams = current_teams[:num_winners - byes]
-                for i in range(byes):
-                    first_round.append((current_teams[num_winners - byes + i], "Bye"))
-                    advancing_teams.append(current_teams[num_winners - byes + i])
-                if advancing_teams:
-                    first_round.extend([(advancing_teams[i], advancing_teams[i+1]) for i in range(0, len(advancing_teams) - (len(advancing_teams) % 2), 2)])
-                    if len(advancing_teams) % 2 == 1:
-                        first_round.append((advancing_teams[-1], "Bye"))
-                if first_round:
-                    playoff_matches.append(("First Round", first_round))
-                current_teams = [f"Winner of R1M{i+1}" if t1 != "Bye" else t2 for t1, t2 in first_round]
+                # Pair up teams for matches
+                matches_needed = num_winners - target_teams
+                for i in range(0, matches_needed * 2, 2):
+                    first_round.append((current_teams[i], current_teams[i+1]))
+                # Assign byes
+                for i in range(matches_needed * 2, num_winners):
+                    first_round.append((current_teams[i], "Bye"))
+                playoff_matches.append(("First Round", first_round))
+                current_teams = [f"Winner of R1M{i+1}" if t1 != "Bye" else t2 for i, (t1, t2) in enumerate(first_round)]
                 random.shuffle(current_teams)
 
-            # Generate subsequent rounds
+            # Subsequent rounds
             round_num = 1 if playoff_matches else 0
             while len(current_teams) > 1:
                 round_name = "Finals" if len(current_teams) == 2 else (
