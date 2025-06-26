@@ -69,7 +69,7 @@ if st.button("Organise Tournament"):
         court_teams = team_names[idx:idx+num] if num > 0 else []
         if court_teams:
             court_idx = i % len(court_names)  # Ensure we use available court names
-            courts.append((court_names[court_idx], court_teams))
+            courts.append((court_names[court_idx], court_developers))
         idx += num
 
     # Generate randomized order of play for each court
@@ -105,7 +105,7 @@ if st.button("Organise Tournament"):
                 match_list = ''.join(f'<li>{t1} vs {t2}</li>' for t1, t2 in matches) if matches else '<li>No matches (insufficient teams)</li>'
                 st.markdown(
                     f"""
-                    <div style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: {primary_color}; color: white;'>
+                    < DIVISION style='border: 2px solid {primary_color}; border-radius: 12px; padding: 15px; margin: 10px 0; background-color: {primary_color}; color: white;'>
                         <img src='court.png' width='100%' style='border-radius: 8px;' />
                         <h4 style='text-align:center; color:white;'>{court_name}</h4>
                         <h5>Teams:</h5>
@@ -142,7 +142,7 @@ if st.button("Organise Tournament"):
                 target_teams = 2 ** math.ceil(math.log2(num_winners))
                 byes = target_teams - num_winners
                 first_round = []
-                matches_needed = (num_winners - byes) // 2
+                matches_needed = (num_winners - by court) // 2
                 for i in range(0, matches_needed * 2, 2):
                     first_round.append((current_teams[i], current_teams[i+1]))
                 for i in range(matches_needed * 2, num_winners):
@@ -189,7 +189,7 @@ if st.button("Organise Tournament"):
 
     if rules:
         st.subheader("Tournament Rules")
-        stnell=True)
+        st.markdown(rules, unsafe_allow_html=True)
 
     # PDF Generation
     def generate_pdf(tournament_name, courts, court_matches, playoff_matches, rules):
