@@ -13,23 +13,20 @@ st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page
 # --- RESILIENT CONNECTION HANDLER ---
 # --- RESILIENT CONNECTION HANDLER ---
 # --- RESILIENT CONNECTION HANDLER ---
+# --- RESILIENT CONNECTION HANDLER ---
 def get_connection():
     """
     Creates a connection by cleaning the private key and separating
     the URL from the service account credentials to avoid argument errors.
     """
     try:
-        # 1. Get the URL separately
+        # 1. Extract the URL first so we can remove it from the creds dict
         spreadsheet_url = st.secrets.connections.gsheets.get("spreadsheet")
         
         # 2. Create a clean dictionary for ONLY the credentials
         creds = dict(st.secrets.connections.gsheets)
         
-        # Remove keys that aren't part of the authentication process
-        creds.pop("spreadsheet", None)
-        creds.pop("type", None)
-        
-        # 3. Clean the private key formatting
+        # 3. Clean the private key formatting (The binascii fix)
         raw_key = creds.get("private_key", "")
         cleaned_key = raw_key.replace("\\n", "\n")
         
@@ -39,9 +36,14 @@ def get_connection():
             cleaned_key = f"-----BEGIN PRIVATE KEY-----\n{wrapped_content}\n-----END PRIVATE KEY-----\n"
         
         creds["private_key"] = cleaned_key
+
+        # 4. Remove keys that are NOT authentication credentials
+        # This prevents the "unexpected keyword argument" error in the internal _connect()
+        creds.pop("spreadsheet", None)
+        creds.pop("type", None)
         
-        # 4. Initialize connection
-        # We pass the URL as a direct argument and the creds as keyword arguments
+        # 5. Initialize connection
+        # spreadsheet goes to the connection, **creds goes to the authenticator
         return st.connection(
             "gsheets", 
             type=GSheetsConnection, 
