@@ -12,16 +12,24 @@ st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page
 
 # --- RESILIENT CONNECTION HANDLER ---
 # --- RESILIENT CONNECTION HANDLER ---
+# --- RESILIENT CONNECTION HANDLER ---
 def get_connection():
     """
-    Creates a connection by cleaning the private key and removing 
-    conflicting keyword arguments.
+    Creates a connection by cleaning the private key and separating
+    the URL from the service account credentials to avoid argument errors.
     """
     try:
-        # Create a mutable copy
+        # 1. Get the URL separately
+        spreadsheet_url = st.secrets.connections.gsheets.get("spreadsheet")
+        
+        # 2. Create a clean dictionary for ONLY the credentials
         creds = dict(st.secrets.connections.gsheets)
         
-        # 1. Clean the private key
+        # Remove keys that aren't part of the authentication process
+        creds.pop("spreadsheet", None)
+        creds.pop("type", None)
+        
+        # 3. Clean the private key formatting
         raw_key = creds.get("private_key", "")
         cleaned_key = raw_key.replace("\\n", "\n")
         
@@ -32,16 +40,12 @@ def get_connection():
         
         creds["private_key"] = cleaned_key
         
-        # 2. REMOVE CONFLICTING KEYS
-        # We delete these because they are already defined in the st.connection call
-        creds.pop("type", None)
-        creds.pop("spreadsheet", None)
-        
-        # 3. Initialize
+        # 4. Initialize connection
+        # We pass the URL as a direct argument and the creds as keyword arguments
         return st.connection(
             "gsheets", 
             type=GSheetsConnection, 
-            spreadsheet=st.secrets.connections.gsheets.spreadsheet, # Pass this explicitly
+            spreadsheet=spreadsheet_url,
             **creds
         )
     except Exception as e:
