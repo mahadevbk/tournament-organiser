@@ -11,31 +11,39 @@ import re
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
 # --- RESILIENT CONNECTION HANDLER ---
+# --- RESILIENT CONNECTION HANDLER ---
 def get_connection():
     """
-    Creates a connection by cleaning the private key in memory 
-    without modifying the read-only st.secrets object.
+    Creates a connection by cleaning the private key and removing 
+    conflicting keyword arguments.
     """
     try:
-        # Create a mutable copy of the secrets dictionary
+        # Create a mutable copy
         creds = dict(st.secrets.connections.gsheets)
         
-        # 1. Handle literal backslashes/newlines
+        # 1. Clean the private key
         raw_key = creds.get("private_key", "")
         cleaned_key = raw_key.replace("\\n", "\n")
         
-        # 2. Fix 'One-Line' Key formatting (The binascii fix)
-        # Standard PEM format requires newlines every 64 characters
         if "-----BEGIN PRIVATE KEY-----" in cleaned_key and "\n" not in cleaned_key[28:-26]:
             content = cleaned_key.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip()
             wrapped_content = "\n".join(re.findall(r'.{1,64}', content))
             cleaned_key = f"-----BEGIN PRIVATE KEY-----\n{wrapped_content}\n-----END PRIVATE KEY-----\n"
         
-        # 3. Inject cleaned key into our temporary dictionary
         creds["private_key"] = cleaned_key
         
-        # 4. Initialize connection with the corrected credentials
-        return st.connection("gsheets", type=GSheetsConnection, **creds)
+        # 2. REMOVE CONFLICTING KEYS
+        # We delete these because they are already defined in the st.connection call
+        creds.pop("type", None)
+        creds.pop("spreadsheet", None)
+        
+        # 3. Initialize
+        return st.connection(
+            "gsheets", 
+            type=GSheetsConnection, 
+            spreadsheet=st.secrets.connections.gsheets.spreadsheet, # Pass this explicitly
+            **creds
+        )
     except Exception as e:
         st.error(f"Failed to initialize Google Sheets: {e}")
         st.stop()
