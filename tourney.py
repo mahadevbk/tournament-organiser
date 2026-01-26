@@ -10,31 +10,22 @@ import re
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
-# --- THE ULTIMATE KEY FIX ---
-# Instead of passing dictionaries, we modify the actual secret in memory.
-# This bypasses the keyword argument error entirely.
+# --- THE ULTIMATE KEY FIX (RETAINED) ---
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
     raw_key = st.secrets.connections.gsheets.private_key
-    # Fix 1: Newlines
     cleaned_key = raw_key.replace("\\n", "\n")
-    # Fix 2: Wrap long lines for binascii (PEM standard)
     if "-----BEGIN PRIVATE KEY-----" in cleaned_key and "\n" not in cleaned_key[28:-26]:
         header = "-----BEGIN PRIVATE KEY-----\n"
         footer = "\n-----END PRIVATE KEY-----"
         content = cleaned_key.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip()
         wrapped_content = "\n".join(re.findall(r'.{1,64}', content))
         cleaned_key = f"{header}{wrapped_content}{footer}\n"
-    
-    # We use a try-except here because some Streamlit versions 
-    # don't allow direct assignment to secrets. 
-    # If this fails, the library will try to use the raw secret.
     try:
         st.secrets.connections.gsheets["private_key"] = cleaned_key
     except:
         pass
 
 # --- INITIALIZE CONNECTION ---
-# We keep this as simple as possible to let the library use the secrets automatically.
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- CSS FOR UI ---
@@ -60,7 +51,7 @@ def load_db():
         if df is None or df.empty or "Tournament" not in df.columns:
             return pd.DataFrame(columns=["Tournament", "Data"])
         return df
-    except Exception:
+    except:
         return pd.DataFrame(columns=["Tournament", "Data"])
 
 def save_db(df):
@@ -95,17 +86,28 @@ with st.sidebar:
     new_t = st.text_input("New Tournament Name")
     if st.button("✨ Create Tournament"):
         if new_t and new_t not in tournament_list:
-            init_data = {"players": [f"Player {i+1}" for i in range(8)], "courts": ["Court 1"], "bracket": None, "locked": False}
+            init_data = {"players": [f"Player {i+1}" for i in range(8)], "courts": ["Court 1"], "bracket": None, "winners": {}, "locked": False}
             new_row = pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])
             if save_db(pd.concat([df_db, new_row], ignore_index=True)):
                 st.rerun()
 
     selected_t = st.selectbox("Active Tournament", ["-- Select --"] + tournament_list)
+    
+    # --- DELETE OPTION (RESTORED) ---
+    if selected_t != "-- Select --":
+        st.divider()
+        if st.button(f"🗑️ Delete {selected_t}", type="secondary"):
+            updated_df = df_db[df_db["Tournament"] != selected_t]
+            if save_db(updated_df):
+                st.rerun()
 
 if selected_t != "-- Select --":
     row = df_db[df_db["Tournament"] == selected_t]
     if not row.empty:
         t_data = ast.literal_eval(row["Data"].values[0])
+        # Ensure winners dict exists
+        if "winners" not in t_data: t_data["winners"] = {}
+        
         tab1, tab2, tab3 = st.tabs(["⚙️ Setup", "📅 Order of Play", "📊 Bracket"])
 
         with tab1:
@@ -117,6 +119,7 @@ if selected_t != "-- Select --":
             
             if st.button("🚀 GENERATE & SYNC", type="primary", use_container_width=True, disabled=t_data["locked"]):
                 t_data["bracket"] = generate_bracket(t_data["players"])
+                t_data["winners"] = {} # Reset winners for new bracket
                 df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
                 if save_db(df_db):
                     st.balloons()
@@ -135,11 +138,49 @@ if selected_t != "-- Select --":
 
         with tab3:
             if t_data.get("bracket"):
-                st.write("Current Matchups:")
-                for i, m in enumerate(t_data["bracket"]):
-                    st.write(f"Match {i+1}: **{m[0]}** vs **{m[1]}**")
+                # --- INTERACTIVE BRACKET LOGIC (RESTORED) ---
+                current_round = t_data["bracket"]
+                round_num = 1
                 
-                if st.button("💾 Save Progress"):
+                while len(current_round) >= 1:
+                    st.subheader(f"Round {round_num}")
+                    cols = st.columns(len(current_round))
+                    next_round_players = []
+                    
+                    for i, match in enumerate(current_round):
+                        with cols[i]:
+                            p1, p2 = match[0], match[1]
+                            
+                            if p2 == "BYE":
+                                st.success(f"⏩ {p1} advances")
+                                next_round_players.append(p1)
+                            elif p1 == "TBD" or p2 == "TBD":
+                                st.info("Waiting for previous round...")
+                                next_round_players.append("TBD")
+                            else:
+                                key = f"r{round_num}_m{i}_{selected_t}"
+                                # Load saved winner if exists
+                                default_idx = 0
+                                if key in t_data["winners"]:
+                                    default_idx = [None, p1, p2].index(t_data["winners"][key])
+                                
+                                winner = st.selectbox(f"{p1} vs {p2}", [None, p1, p2], index=default_idx, key=key, disabled=t_data["locked"])
+                                t_data["winners"][key] = winner
+                                next_round_players.append(winner if winner else "TBD")
+                    
+                    if len(next_round_players) > 1:
+                        # Pair up winners for the next round
+                        current_round = [next_round_players[j:j+2] for j in range(0, len(next_round_players), 2)]
+                        round_num += 1
+                        st.divider()
+                    else:
+                        st.divider()
+                        if next_round_players[0] != "TBD":
+                            st.balloons()
+                            st.success(f"🏆 Tournament Champion: **{next_round_players[0]}**")
+                        break
+                
+                if st.button("💾 Save Winner Progress", use_container_width=True):
                     df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
                     save_db(df_db)
-                    st.toast("Saved!")
+                    st.toast("Progress Saved to Cloud!")
