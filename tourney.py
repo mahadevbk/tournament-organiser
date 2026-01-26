@@ -41,9 +41,13 @@ st.markdown("""
 # --- DATABASE HELPERS ---
 def load_db():
     try:
-        # ttl=0 ensures we always fetch the latest data from the Cloud/Pi
-        return conn.read(ttl=0)
-    except Exception:
+        df = conn.read(ttl=0)
+        # If the sheet is empty or missing columns, create them
+        if df.empty or "Tournament" not in df.columns:
+            return pd.DataFrame(columns=["Tournament", "Data"])
+        return df
+    except Exception as e:
+        # If we can't even read the sheet, return the structure we need
         return pd.DataFrame(columns=["Tournament", "Data"])
 
 def save_db(df):
