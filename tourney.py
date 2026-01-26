@@ -1,12 +1,19 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 import random
 import math
 import time
+import ast
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Tennis Tourney Hub", layout="wide", page_icon="🎾")
 
-# --- CSS FOR TEXT VISIBILITY & CARDS ---
+# --- INITIALIZE GOOGLE SHEETS CONNECTION ---
+# This uses the [connections.gsheets] section from your secrets.toml
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- CSS FOR VISIBILITY ---
 st.markdown("""
     <style>
     .match-card {
@@ -18,34 +25,43 @@ st.markdown("""
         min-height: 120px;
         color: #1b5e20 !important;
     }
-    .match-card b {
-        color: #000000 !important;
-    }
-    .court-header {
-        color: #1b5e20 !important;
-        font-weight: bold;
-        border-bottom: 1px solid #c8e6c9;
+    .match-card b { color: #000000 !important; }
+    .court-header { 
+        color: #1b5e20 !important; 
+        font-weight: bold; 
+        border-bottom: 1px solid #c8e6c9; 
         margin-bottom: 10px;
-        display: block;
-    }
-    .bye-card {
-        border-left: 5px solid #ffa000;
-        background-color: #fff8e1;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-        color: #7f0000 !important;
+        display: block; 
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- INITIALIZE SESSION STATE ---
-if 'tournaments' not in st.session_state:
-    st.session_state.tournaments = {}
+# --- DATABASE HELPERS ---
+def load_full_db():
+    """Reads the entire sheet as a DataFrame."""
+    try:
+        # ttl=0 ensures we always get the freshest data from the sheet
+        return conn.read(ttl=0)
+    except:
+        return pd.DataFrame(columns=["Tournament", "Data"])
+
+def save_tournament(t_name, t_dict):
+    """Saves or updates a tournament entry in the Google Sheet."""
+    df = load_full_db()
+    # Convert dictionary to string for storage in a single cell
+    data_str = str(t_dict)
+    
+    if t_name in df["Tournament"].values:
+        df.loc[df["Tournament"] == t_name, "Data"] = data_str
+    else:
+        new_row = pd.DataFrame([{"Tournament": t_name, "Data": data_str}])
+        df = pd.concat([df, new_row], ignore_index=True)
+    
+    conn.update(data=df)
 
 def generate_bracket(participants):
-    # Strict filter to remove empty strings and "None" objects
-    shuffled = [str(p).strip() for p in participants if p and str(p).strip() != "" and str(p) != "None"]
+    """Mathematical elimination logic."""
+    shuffled = [str(p).strip() for p in participants if p and str(p).strip() not in ["", "None", "nan"]]
     random.shuffle(shuffled)
     n = len(shuffled)
     if n == 0: return None, 0, 0, False
@@ -56,152 +72,130 @@ def generate_bracket(participants):
     
     full_slots = shuffled + (["BYE"] * num_byes)
     bracket = []
-    # Standard tournament seeding/pairing
     for i in range(next_pow_2 // 2):
         bracket.append([full_slots[i], full_slots[next_pow_2 - 1 - i]])
     return bracket, num_byes, next_pow_2, is_perfect
 
-# --- SIDEBAR: MANAGEMENT ---
-st.sidebar.title("🎾 Admin Desk")
+# --- MAIN APP ---
+st.title("🎾 Tennis Persistent Hub")
 
-with st.sidebar.expander("✨ Create Tournament"):
-    new_t = st.text_input("Tournament Name")
-    if st.button("Add Tournament"):
-        if new_t and new_t not in st.session_state.tournaments:
-            st.session_state.tournaments[new_t] = {
+# 1. Fetch current database state
+db_df = load_full_db()
+tournament_names = db_df["Tournament"].unique().tolist()
+
+# 2. Sidebar Management
+with st.sidebar:
+    st.header("Admin Desk")
+    new_t = st.text_input("New Tournament Name")
+    if st.button("✨ Create"):
+        if new_t and new_t not in tournament_names:
+            initial_data = {
                 "players": [f"player {i+1}" for i in range(17)],
                 "courts": ["Court 1", "Court 2"],
                 "bracket": None,
                 "gen_info": {},
                 "locked": False
             }
-            st.sidebar.success(f"'{new_t}' added!")
+            save_tournament(new_t, initial_data)
+            st.success(f"Created {new_t}")
             st.rerun()
 
-selected_t = st.sidebar.selectbox("Active Tournament", ["-- Select --"] + list(st.session_state.tournaments.keys()))
-
-if selected_t != "-- Select --":
-    st.sidebar.divider()
-    # Lock/Unlock Toggle
-    is_locked = st.session_state.tournaments[selected_t].get("locked", False)
-    if st.sidebar.checkbox("🔒 Lock Tournament Results", value=is_locked):
-        st.session_state.tournaments[selected_t]["locked"] = True
-    else:
-        st.session_state.tournaments[selected_t]["locked"] = False
+    selected_t = st.selectbox("Select Tournament", ["-- Select --"] + tournament_names)
     
-    # Delete Button
-    if st.sidebar.button(f"🗑️ Delete {selected_t}", type="secondary", use_container_width=True):
-        del st.session_state.tournaments[selected_t]
-        st.sidebar.warning("Tournament deleted.")
-        st.rerun()
+    if selected_t != "-- Select --":
+        st.divider()
+        if st.button(f"🗑️ Delete {selected_t}", type="secondary"):
+            df_remaining = db_df[db_df["Tournament"] != selected_t]
+            conn.update(data=df_remaining)
+            st.rerun()
 
-# --- MAIN INTERFACE ---
-if selected_t == "-- Select --":
-    st.title("Tennis Tournament Organizer")
-    st.info("👈 Use the sidebar to create or select a tournament to begin.")
-else:
-    t_data = st.session_state.tournaments[selected_t]
-    tab1, tab2, tab3 = st.tabs(["⚙️ Setup", "📅 Order of Play", "📊 Tournament Bracket"])
+# 3. Tournament Logic
+if selected_t != "-- Select --":
+    # Load specific tournament data
+    row = db_df[db_df["Tournament"] == selected_t].iloc[0]
+    # ast.literal_eval is safer than eval() for converting string back to dict
+    t_data = ast.literal_eval(row["Data"])
+    
+    tab1, tab2, tab3 = st.tabs(["⚙️ Setup", "📅 Order of Play", "📊 Bracket"])
 
     with tab1:
         st.subheader("Configuration")
-        if t_data.get("locked"):
-            st.warning("This tournament is LOCKED. Unlock in the sidebar to edit names or courts.")
+        is_locked = st.checkbox("🔒 Lock Results", value=t_data.get("locked", False))
+        t_data["locked"] = is_locked
         
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**Participants**")
-            t_data["players"] = st.data_editor(t_data["players"], num_rows="dynamic", key=f"p_e_{selected_t}", disabled=t_data["locked"])
+            t_data["players"] = st.data_editor(t_data["players"], num_rows="dynamic", key=f"pe_{selected_t}", disabled=is_locked)
         with c2:
-            st.write("**Courts**")
-            t_data["courts"] = st.data_editor(t_data["courts"], num_rows="dynamic", key=f"c_e_{selected_t}", disabled=t_data["locked"])
+            t_data["courts"] = st.data_editor(t_data["courts"], num_rows="dynamic", key=f"ce_{selected_t}", disabled=is_locked)
         
-        if st.button("🚀 GENERATE & RANDOMIZE", type="primary", use_container_width=True, disabled=t_data["locked"]):
-            with st.status("Initializing Bracket...", expanded=True) as status:
-                st.write("Cleaning player list...")
-                time.sleep(0.4)
-                st.write("Randomizing pairings...")
+        if st.button("🚀 SAVE & GENERATE", type="primary", use_container_width=True, disabled=is_locked):
+            with st.status("Syncing with Google Sheets...") as s:
                 bracket, byes, size, perfect = generate_bracket(t_data["players"])
                 t_data["bracket"] = bracket
-                t_data["gen_info"] = {
-                    "byes": byes, 
-                    "size": size, 
-                    "perfect": perfect, 
-                    "total": len([p for p in t_data["players"] if p and str(p).strip() != ""])
-                }
-                st.write("Assigning courts...")
-                time.sleep(0.4)
-                status.update(label="Tournament Successfully Generated!", state="complete", expanded=False)
-            
+                t_data["gen_info"] = {"byes": byes, "size": size, "perfect": perfect, "total": len([p for p in t_data["players"] if p])}
+                save_tournament(selected_t, t_data)
+                s.update(label="Saved to Cloud!", state="complete")
             st.balloons()
-            st.success("Check the 'Order of Play' tab for your matches!")
-            time.sleep(1)
             st.rerun()
 
     with tab2:
         if not t_data.get("bracket"):
-            st.warning("Please generate the tournament in the Setup tab.")
+            st.warning("Generate the tournament first.")
         else:
             info = t_data["gen_info"]
-            if not info.get("perfect"):
-                st.warning(f"⚠️ **Note:** {info.get('total')} players isn't a power of 2. Scaled to {info.get('size')} with {info.get('byes')} byes.")
-            else:
-                st.success(f"✅ **Perfect Bracket:** {info.get('total')} players is a power of 2.")
-
+            st.info(f"Bracket: {info.get('size')} slots | Byes: {info.get('byes')}")
+            
             active_matches = [m for m in t_data["bracket"] if "BYE" not in m]
             if active_matches:
-                st.subheader("Current Court Assignments")
-                num_courts = len(t_data["courts"])
-                cols = st.columns(num_courts)
+                cols = st.columns(len(t_data["courts"]))
                 for i, match in enumerate(active_matches):
-                    court_idx = i % num_courts
-                    with cols[court_idx]:
-                        st.markdown(f"""
-                        <div class="match-card">
-                            <span class="court-header">📍 {t_data['courts'][court_idx]}</span>
-                            <b>{match[0]}</b> <br>
-                            <span style="font-size:0.8em; color:#666;">vs</span><br> 
-                            <b>{match[1]}</b>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    c_idx = i % len(t_data["courts"])
+                    with cols[c_idx]:
+                        st.markdown(f"""<div class='match-card'>
+                            <span class='court-header'>📍 {t_data['courts'][c_idx]}</span>
+                            <b>{match[0]}</b> vs <b>{match[1]}</b>
+                        </div>""", unsafe_allow_html=True)
 
     with tab3:
         if not t_data.get("bracket"):
-            st.warning("Generate the tournament to view the bracket.")
+            st.warning("Generate the tournament first.")
         else:
+            # We must track if data changed to save back to sheets
+            changed = False
             current_round = t_data["bracket"]
             round_idx = 1
+            
             while len(current_round) >= 1:
                 st.subheader(f"Round {round_idx}")
                 cols = st.columns(len(current_round))
                 next_round = []
+                
                 for i, match in enumerate(current_round):
                     with cols[i]:
                         p1, p2 = match[0], match[1]
                         st.write(f"**{p1}** vs **{p2}**")
+                        
                         if p2 == "BYE":
                             next_round.append(p1)
-                            st.caption("Bye")
                         elif "TBD" in [p1, p2]:
                             next_round.append("TBD")
-                            st.caption("Waiting...")
                         else:
-                            # Winners can't be changed if locked
-                            win = st.selectbox("Winner", ["-", p1, p2], key=f"r{round_idx}m{i}{selected_t}", disabled=t_data["locked"])
-                            next_round.append(win if win != "-" else "TBD")
-                st.divider()
+                            # Selection logic
+                            win = st.selectbox("Winner", ["-", p1, p2], key=f"r{round_idx}m{i}{selected_t}", disabled=is_locked)
+                            if win != "-":
+                                next_round.append(win)
+                            else:
+                                next_round.append("TBD")
+                
                 if len(next_round) > 1:
                     current_round = [next_round[j:j+2] for j in range(0, len(next_round), 2)]
                     round_idx += 1
                 else:
                     if next_round[0] not in ["TBD", "-"]:
-                        st.success(f"🏅 **Tournament Champion: {next_round[0]}**")
+                        st.success(f"🏆 Champion: {next_round[0]}")
                     break
-
-
-st.markdown("""
-<div style='background-color: #0d5384; padding: 1rem; border-left: 5px solid #fff500; border-radius: 0.5rem; color: white;'>
-Built with ❤️ using <a href='https://streamlit.io/' style='color: #ccff00;'>Streamlit</a> — free and open source.
-<a href='https://devs-scripts.streamlit.app/' style='color: #ccff00;'>Other Scripts by dev</a> on Streamlit.
-</div>
-""", unsafe_allow_html=True)
+            
+            if st.button("💾 Save Winners to Cloud", disabled=is_locked):
+                save_tournament(selected_t, t_data)
+                st.toast("Progress Saved!")
