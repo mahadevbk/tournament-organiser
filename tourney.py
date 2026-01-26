@@ -10,32 +10,38 @@ import re
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
-# --- CONNECTION LOGIC (The "No-Touch" Secrets Fix) ---
+# --- RESILIENT CONNECTION HANDLER ---
 def get_connection():
-    # 1. Pull the raw secrets into a standard Python dictionary
-    # This allows us to modify the key without touching the read-only st.secrets
-    creds = dict(st.secrets.connections.gsheets)
-    
-    secret_key = creds.get("private_key", "")
-    
-    # 2. Clean up literal \n if they exist
-    secret_key = secret_key.replace("\\n", "\n")
-    
-    # 3. Re-wrap the key if it's one long line (The binascii fix)
-    if "-----BEGIN PRIVATE KEY-----" in secret_key and "\n" not in secret_key[28:-26]:
-        header = "-----BEGIN PRIVATE KEY-----\n"
-        footer = "\n-----END PRIVATE KEY-----"
-        content = secret_key.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip()
-        wrapped_content = "\n".join(re.findall(r'.{1,64}', content))
-        secret_key = f"{header}{wrapped_content}{footer}"
-    
-    # Update our local dictionary with the fixed key
-    creds["private_key"] = secret_key
-    
-    # 4. Create the connection using the cleaned dictionary
-    return st.connection("gsheets", type=GSheetsConnection, **creds)
+    """
+    Creates a connection by cleaning the private key in memory 
+    without modifying the read-only st.secrets object.
+    """
+    try:
+        # Create a mutable copy of the secrets dictionary
+        creds = dict(st.secrets.connections.gsheets)
+        
+        # 1. Handle literal backslashes/newlines
+        raw_key = creds.get("private_key", "")
+        cleaned_key = raw_key.replace("\\n", "\n")
+        
+        # 2. Fix 'One-Line' Key formatting (The binascii fix)
+        # Standard PEM format requires newlines every 64 characters
+        if "-----BEGIN PRIVATE KEY-----" in cleaned_key and "\n" not in cleaned_key[28:-26]:
+            content = cleaned_key.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip()
+            wrapped_content = "\n".join(re.findall(r'.{1,64}', content))
+            cleaned_key = f"-----BEGIN PRIVATE KEY-----\n{wrapped_content}\n-----END PRIVATE KEY-----\n"
+        
+        # 3. Inject cleaned key into our temporary dictionary
+        creds["private_key"] = cleaned_key
+        
+        # 4. Initialize connection with the corrected credentials
+        return st.connection("gsheets", type=GSheetsConnection, **creds)
+    except Exception as e:
+        st.error(f"Failed to initialize Google Sheets: {e}")
+        st.stop()
 
 conn = get_connection()
+
 # --- CSS FOR UI ---
 st.markdown("""
     <style>
@@ -50,11 +56,8 @@ st.markdown("""
     }
     .match-card b { color: #000000 !important; }
     .court-header { 
-        color: #1b5e20 !important; 
-        font-weight: bold; 
-        border-bottom: 1px solid #c8e6c9; 
-        margin-bottom: 8px;
-        display: block; 
+        color: #1b5e20 !important; font-weight: bold; border-bottom: 1px solid #c8e6c9; 
+        margin-bottom: 8px; display: block; 
     }
     .sync-text { font-size: 0.8em; color: gray; }
     </style>
@@ -64,15 +67,10 @@ st.markdown("""
 def load_db():
     try:
         df = conn.read(ttl=0)
-        # Ensure the columns exist to prevent KeyError
-        if df is None or df.empty:
-            return pd.DataFrame(columns=["Tournament", "Data"])
-        if "Tournament" not in df.columns:
-            st.error("Header 'Tournament' not found in Sheet. Please check Cell A1.")
+        if df is None or df.empty or "Tournament" not in df.columns:
             return pd.DataFrame(columns=["Tournament", "Data"])
         return df
-    except Exception as e:
-        st.warning("Awaiting Google Sheets connection...")
+    except:
         return pd.DataFrame(columns=["Tournament", "Data"])
 
 def save_db(df):
@@ -81,11 +79,11 @@ def save_db(df):
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.error(f"Save failed: {e}")
+        st.error(f"Update failed. Ensure you enabled the Google Sheets API and shared the sheet. Error: {e}")
         return False
 
 def generate_bracket(participants):
-    players = [str(p).strip() for p in participants if p and str(p).strip() not in ["", "None", "nan", "None"]]
+    players = [str(p).strip() for p in participants if p and str(p).strip() not in ["", "None", "nan"]]
     random.shuffle(players)
     n = len(players)
     if n == 0: return None, 0, 0, False
@@ -116,8 +114,7 @@ with st.sidebar:
                 "bracket": None, "locked": False
             }
             new_row = pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])
-            updated_df = pd.concat([df_db, new_row], ignore_index=True)
-            if save_db(updated_df):
+            if save_db(pd.concat([df_db, new_row], ignore_index=True)):
                 st.success(f"Created {new_t}")
                 st.rerun()
 
@@ -128,17 +125,14 @@ with st.sidebar:
         if st.button(f"🗑️ Delete {selected_t}", type="secondary"):
             save_db(df_db[df_db["Tournament"] != selected_t])
             st.rerun()
-        
-        st.markdown(f"<p class='sync-text'>Synced: {datetime.datetime.now().strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
 
 if selected_t != "-- Select --":
-    # Get the row for the selected tournament
     row = df_db[df_db["Tournament"] == selected_t]
     if not row.empty:
         try:
             t_data = ast.literal_eval(row["Data"].values[0])
         except:
-            st.error("Data format in spreadsheet is corrupted.")
+            st.error("Data in spreadsheet is corrupted.")
             st.stop()
         
         tab1, tab2, tab3 = st.tabs(["⚙️ Setup", "📅 Order of Play", "📊 Bracket"])
@@ -166,33 +160,16 @@ if selected_t != "-- Select --":
         with tab2:
             if t_data.get("bracket"):
                 active = [m for m in t_data["bracket"] if "BYE" not in m]
-                num_c = len(t_data["courts"])
-                cols = st.columns(num_c)
+                cols = st.columns(len(t_data["courts"]))
                 for i, match in enumerate(active):
-                    c_idx = i % num_c
+                    c_idx = i % len(t_data["courts"])
                     with cols[c_idx]:
                         st.markdown(f"<div class='match-card'><span class='court-header'>📍 {t_data['courts'][c_idx]}</span><b>{match[0]}</b> vs <b>{match[1]}</b></div>", unsafe_allow_html=True)
-            else:
-                st.info("Go to Setup to generate the bracket.")
 
         with tab3:
             if t_data.get("bracket"):
-                # Simplified Winner Selection
-                st.subheader("Match Winners")
-                bracket = t_data["bracket"]
-                
-                # Show only current active round for simplicity
-                cols = st.columns(len(bracket))
-                for i, match in enumerate(bracket):
-                    with cols[i]:
-                        st.write(f"Match {i+1}")
-                        p1, p2 = match[0], match[1]
-                        if p2 == "BYE":
-                            st.success(f"{p1} (Bye)")
-                        else:
-                            # Note: We don't have a complex multi-round winner state here 
-                            # to keep the string storage simple, but you can select winners.
-                            st.write(f"**{p1}** vs **{p2}**")
+                st.write("Tournament Bracket Pairings:")
+                st.json(t_data["bracket"]) # Displaying the raw bracket for progression tracking
                 
                 if st.button("💾 Save Progress", disabled=t_data["locked"]):
                     df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
