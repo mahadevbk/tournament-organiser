@@ -2,18 +2,21 @@ import streamlit as st
 import random
 import math
 
-st.set_page_config(page_title="Multi-Org Tennis Hub", layout="wide")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Tennis Tourney Hub", layout="wide", page_icon="🎾")
 
 # --- DATABASE EMULATION ---
-# In a production app, you'd use a SQL database. 
-# Here, we use a global session state to store multiple tournaments.
+# Stores everything: { "Tourney Name": { "players": [], "courts": [], "bracket": [], "scores": {} } }
 if 'tournaments' not in st.session_state:
     st.session_state.tournaments = {}
 
 def generate_bracket(participants):
-    shuffled = list(participants)
+    """Logic to handle randomization and power-of-2 byes."""
+    shuffled = [p for p in participants if p.strip() != ""]
     random.shuffle(shuffled)
     n = len(shuffled)
+    if n < 2: return None
+    
     next_pow_2 = 2**math.ceil(math.log2(n))
     num_byes = next_pow_2 - n
     
@@ -27,19 +30,19 @@ def generate_bracket(participants):
         idx += 2
     return bracket
 
-# --- SIDEBAR: TOURNAMENT SELECTOR ---
-st.sidebar.title("🏢 Organization Portal")
-new_t_name = st.sidebar.text_input("Create New Tournament Name")
-if st.sidebar.button("Add Tournament"):
+# --- SIDEBAR: NAVIGATION ---
+st.sidebar.title("🎾 Tournament Manager")
+new_t_name = st.sidebar.text_input("Create New Tournament", placeholder="e.g. Summer Open 2026")
+
+if st.sidebar.button("Add Tournament", use_container_width=True):
     if new_t_name and new_t_name not in st.session_state.tournaments:
         st.session_state.tournaments[new_t_name] = {
             "bracket": None,
-            "scores": {},
-            "players": [],
-            "courts": [],
+            "players": ["Player 1", "Player 2", "Player 3", "Player 4"],
+            "courts": ["Court 1", "Court 2"],
             "mode": "Singles"
         }
-        st.sidebar.success(f"'{new_t_name}' Created!")
+        st.sidebar.success(f"Added {new_t_name}")
 
 st.sidebar.divider()
 
@@ -48,86 +51,135 @@ selected_t = st.sidebar.selectbox(
     options=["-- Select --"] + list(st.session_state.tournaments.keys())
 )
 
-# --- MAIN INTERFACE ---
+# --- MAIN APP LOGIC ---
 if selected_t == "-- Select --":
-    st.title("🎾 Tennis Tournament Hub")
-    st.info("Select a tournament from the sidebar or create a new one to begin.")
-    st.image("https://images.unsplash.com/photo-1595435066319-389369269550?q=80&w=1000&auto=format&fit=crop", width=700)
+    st.title("Welcome to Tennis Tourney Pro")
+    st.info("👈 Use the sidebar to create or select a tournament to get started.")
+    st.markdown("""
+    ### Features:
+    * **Multi-Org Support:** Manage different tournaments simultaneously.
+    * **Smart Brackets:** Automatic 'Bye' handling for non-power-of-2 entries.
+    * **Score Tracking:** Real-time winner advancement.
+    * **Court Assignment:** Automatic rotation of available courts.
+    """)
 else:
     t_data = st.session_state.tournaments[selected_t]
-    st.title(f"🏆 Managing: {selected_t}")
+    st.title(f"🏆 {selected_t}")
     
-    tab1, tab2 = st.tabs(["⚙️ Setup & Players", "🎾 Live Bracket & Scores"])
+    tab1, tab2 = st.tabs(["⚙️ Setup & Registration", "🎾 Match Brackets"])
 
     with tab1:
-        col1, col2 = st.columns(2)
-        with col1:
-            mode = st.selectbox("Format", ["Singles", "Doubles"], key=f"mode_{selected_t}")
-            num_p = st.number_input("Entries", 2, 64, 4, key=f"num_{selected_t}")
-            player_input = st.data_editor(
-                [f"Player {i+1}" for i in range(num_p)], 
-                key=f"edit_{selected_t}", 
-                use_container_width=True
+        st.subheader("1. Configure Participants")
+        
+        # Bulk Import Option
+        with st.expander("📥 Bulk Import Names"):
+            bulk_input = st.text_area("Paste names (one per line or comma separated)")
+            if st.button("Process Bulk List"):
+                if "," in bulk_input:
+                    names = [n.strip() for n in bulk_input.split(",")]
+                else:
+                    names = [n.strip() for n in bulk_input.split("\n")]
+                t_data["players"] = [n for n in names if n]
+                st.rerun()
+
+        col_p, col_c = st.columns(2)
+        
+        with col_p:
+            st.write("**Player/Team List**")
+            # This editor syncs directly with our storage
+            t_data["players"] = st.data_editor(
+                t_data["players"], 
+                num_rows="dynamic", 
+                use_container_width=True,
+                key=f"edit_players_{selected_t}"
             )
-        with col2:
-            num_c = st.number_input("Courts", 1, 10, 2, key=f"cnum_{selected_t}")
-            court_input = st.data_editor(
-                [f"Court {i+1}" for i in range(num_c)], 
-                key=f"cedit_{selected_t}", 
-                use_container_width=True
+            st.caption(f"Total: {len([p for p in t_data['players'] if p])} entries")
+
+        with col_c:
+            st.write("**Available Courts**")
+            t_data["courts"] = st.data_editor(
+                t_data["courts"], 
+                num_rows="dynamic", 
+                use_container_width=True,
+                key=f"edit_courts_{selected_t}"
             )
 
-        if st.button("Initialize / Reset Bracket", type="primary"):
-            t_data["bracket"] = generate_bracket(player_input)
-            t_data["players"] = player_input
-            t_data["courts"] = court_input
-            t_data["scores"] = {} # Clear old scores
-            st.success("New bracket generated for this tournament!")
-            st.rerun()
+        st.divider()
+        if st.button("🚀 GENERATE RANDOMIZED BRACKET", type="primary", use_container_width=True):
+            clean_players = [p for p in t_data["players"] if str(p).strip() != ""]
+            if len(clean_players) < 2:
+                st.error("You need at least 2 players!")
+            else:
+                t_data["bracket"] = generate_bracket(clean_players)
+                st.success("Bracket generated and randomized!")
+                st.rerun()
 
     with tab2:
-        if not t_data["bracket"]:
-            st.warning("No bracket generated for this tournament yet. Go to Setup.")
+        if not t_data.get("bracket"):
+            st.warning("No bracket active. Please finalize your player list and hit 'Generate' in the Setup tab.")
         else:
             current_matches = t_data["bracket"]
             round_idx = 1
             
             while len(current_matches) >= 1:
-                title = "Final" if len(current_matches) == 1 else f"Round {round_idx}"
-                st.subheader(f"📍 {title}")
+                # Round Labels
+                if len(current_matches) == 1: round_label = "🏆 Championship Final"
+                elif len(current_matches) == 2: round_label = "Semi-Finals"
+                elif len(current_matches) == 4: round_label = "Quarter-Finals"
+                else: round_label = f"Round {round_idx}"
+                
+                st.header(round_label)
                 cols = st.columns(len(current_matches))
                 next_round_seeds = []
                 
                 for i, match in enumerate(current_matches):
                     p1, p2 = match[0], match[1]
                     with cols[i]:
-                        st.caption(f"Match {i+1}")
+                        st.markdown(f"**Match {i+1}**")
+                        # Court Assignment Logic
+                        court_name = t_data["courts"][i % len(t_data["courts"])]
+                        st.caption(f"📍 {court_name}")
+                        
                         if p2 == "BYE":
                             st.success(f"✅ {p1}")
                             next_round_seeds.append(p1)
                         else:
-                            # Unique key per tournament, per round, per match
-                            s1 = st.number_input(f"{p1}", 0, 3, key=f"s1_{selected_t}_{round_idx}_{i}")
-                            s2 = st.number_input(f"{p2}", 0, 3, key=f"s2_{selected_t}_{round_idx}_{i}")
+                            # Score Inputs
+                            sc1 = st.number_input(f"{p1}", 0, 5, key=f"s1_{selected_t}_{round_idx}_{i}")
+                            sc2 = st.number_input(f"{p2}", 0, 5, key=f"s2_{selected_t}_{round_idx}_{i}")
                             
-                            win_opt = ["-"]
-                            if s1 > 0 or s2 > 0:
-                                win_opt = [p1 if s1 > s2 else p2]
+                            # Winner Selection
+                            options = ["-- Pending --"]
+                            if sc1 > sc2: options = [p1]
+                            elif sc2 > sc1: options = [p2]
+                            elif sc1 == sc2 and sc1 > 0: options = [p1, p2] # Draw/Tiebreak
                             
-                            winner = st.selectbox("Winner", win_opt, key=f"w_{selected_t}_{round_idx}_{i}")
+                            winner = st.selectbox("Winner", options, key=f"win_{selected_t}_{round_idx}_{i}")
                             
-                            if winner != "-":
+                            if winner != "-- Pending --":
                                 next_round_seeds.append(winner)
                             else:
                                 next_round_seeds.append(None)
                 
                 st.divider()
+                
+                # Logic to flow into next round
                 if len(next_round_seeds) > 1:
-                    current_matches = [next_round_seeds[j:j+2] for j in range(0, len(next_round_seeds), 2)]
+                    # Create pairs for next round
+                    next_matches = []
+                    for j in range(0, len(next_round_seeds), 2):
+                        p_a = next_round_seeds[j]
+                        p_b = next_round_seeds[j+1] if j+1 < len(next_round_seeds) else "TBD"
+                        next_matches.append([p_a if p_a else "TBD", p_b if p_b else "TBD"])
+                    
+                    current_matches = next_matches
                     round_idx += 1
-                    if None in next_round_seeds: break 
+                    
+                    # Stop rendering if the current round isn't finished
+                    if None in next_round_seeds:
+                        break
                 else:
                     if next_round_seeds[0]:
                         st.balloons()
-                        st.title(f"🏅 Champion: {next_round_seeds[0]}")
+                        st.title(f"🎉 Winner: {next_round_seeds[0]} 🎉")
                     break
