@@ -77,7 +77,8 @@ def generate_bracket(participants):
     return bracket, num_byes, next_pow_2, is_perfect
 
 # --- MAIN APP ---
-st.title("🎾 Tennis Persistent Hub")
+st.title("🎾 Tournament Ograniser")
+st.info ("Suggested number of players / Teams : 8, 16, 32, 64....")
 
 # 1. Fetch current database state
 db_df = load_full_db()
