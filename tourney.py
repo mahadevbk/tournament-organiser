@@ -4,6 +4,7 @@ import pandas as pd
 import random
 import math
 import ast
+import datetime
 import re
 
 # --- PAGE CONFIG ---
@@ -41,6 +42,7 @@ st.markdown(f"""
     .court-header {{ color: #4ade80 !important; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; display: block; }}
     .player-name {{ color: #ffffff; font-size: 1.1em; font-weight: 500; }}
     .vs-text {{ color: rgba(255,255,255,0.4); margin: 0 10px; font-style: italic; }}
+    .sync-time {{ font-size: 0.8em; color: #4ade80; opacity: 0.8; margin-top: 10px; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -100,7 +102,7 @@ with st.sidebar:
     new_t = st.text_input("New Name")
     if st.button("✨ Create Tournament"):
         if new_t and new_t not in tournament_list:
-            init_data = {"players": [f"Player {i+1}" for i in range(4)], "courts": ["Court 1"], "format": "Single Elimination", "bracket": None, "winners": {}, "locked": False}
+            init_data = {"players": [f"Player {i+1}" for i in range(4)], "courts": ["Court 1"], "format": "Single Elimination", "bracket": None, "winners": {}, "locked": False, "last_sync": "Never"}
             new_row = pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])
             if save_db(pd.concat([df_db, new_row], ignore_index=True)): st.rerun()
 
@@ -117,6 +119,7 @@ if selected_t != "-- Select --":
         t_data = ast.literal_eval(row["Data"].values[0])
         if "winners" not in t_data: t_data["winners"] = {}
         if "format" not in t_data: t_data["format"] = "Single Elimination"
+        if "last_sync" not in t_data: t_data["last_sync"] = "Unknown"
         
         tab1, tab2, tab3 = st.tabs(["⚙️ SETUP", "📅 ORDER OF PLAY", "📊 PROGRESS"])
 
@@ -134,26 +137,31 @@ if selected_t != "-- Select --":
                 t_data["winners"] = {}
                 df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
                 if save_db(df_db):
-                    st.success("✅ Tournament Generated Successfully!")
+                    st.success("✅ Tournament Generated! Switch to the next tab.")
                     st.balloons()
-                    st.info("Head over to the **ORDER OF PLAY** tab to begin.")
 
         with tab2:
             if t_data.get("bracket"):
+                # Adaptive logic for current matches
                 if t_data["format"] == "Single Elimination":
-                    active = [m for m in t_data["bracket"] if "BYE" not in m]
+                    active = [m for m in t_data["bracket"] if isinstance(m, list) and len(m) == 2 and "BYE" not in m]
                 else: 
-                    active = [m for m in t_data["bracket"][0] if "BYE" not in m]
+                    # Round Robin: Show the first round as the current order of play
+                    active = [m for m in t_data["bracket"][0] if isinstance(m, list) and len(m) == 2 and "BYE" not in m]
                 
-                cols = st.columns(len(t_data["courts"]))
-                for i, match in enumerate(active):
-                    with cols[i % len(t_data["courts"])]:
-                        st.markdown(f"<div class='match-card'><span class='court-header'>📍 {t_data['courts'][i % len(t_data['courts'])]}</span><span class='player-name'>{match[0]}</span><span class='vs-text'>vs</span><span class='player-name'>{match[1]}</span></div>", unsafe_allow_html=True)
-            else: st.info("Please generate the tournament in the **SETUP** tab first.")
+                if active:
+                    cols = st.columns(len(t_data["courts"]))
+                    for i, match in enumerate(active):
+                        with cols[i % len(t_data["courts"])]:
+                            st.markdown(f"<div class='match-card'><span class='court-header'>📍 {t_data['courts'][i % len(t_data['courts'])]}</span><span class='player-name'>{match[0]}</span><span class='vs-text'>vs</span><span class='player-name'>{match[1]}</span></div>", unsafe_allow_html=True)
+                else:
+                    st.info("No active matches scheduled for this round (likely all BYEs).")
+            else: st.info("Generate the tournament in the **SETUP** tab first.")
 
         with tab3:
             if t_data.get("bracket"):
                 if t_data["format"] == "Single Elimination":
+                    # --- SINGLE ELIMINATION ---
                     current_round = t_data["bracket"]
                     r_num = 1
                     while len(current_round) >= 1:
@@ -161,6 +169,7 @@ if selected_t != "-- Select --":
                         cols = st.columns(len(current_round))
                         nxt_rnd = []
                         for i, match in enumerate(current_round):
+                            if not isinstance(match, list) or len(match) < 2: continue # Safety check
                             with cols[i]:
                                 p1, p2 = match[0], match[1]
                                 if p2 == "BYE":
@@ -180,23 +189,23 @@ if selected_t != "-- Select --":
                             r_num += 1
                             st.divider()
                         else:
-                            if nxt_rnd[0] not in ["TBD", None]: st.success(f"🏆 Champion: {nxt_rnd[0]}")
+                            if nxt_rnd and nxt_rnd[0] not in ["TBD", None]: st.success(f"🏆 Champion: {nxt_rnd[0]}")
                             break
                 else:
+                    # --- ROUND ROBIN ---
                     st.markdown("### Leaderboard")
                     wins = {p: 0 for p in t_data["players"] if p != "BYE"}
                     for k, v in t_data["winners"].items():
                         if v and v in wins: wins[v] += 1
                     
                     leader_df = pd.DataFrame(list(wins.items()), columns=["Player Name", "Total Wins"]).sort_values(by="Total Wins", ascending=False)
-                    
-                    # Renders leaderboard without the index column
                     st.dataframe(leader_df, hide_index=True, use_container_width=True)
                     
                     st.markdown("### Match Schedule")
                     for r_idx, rnd in enumerate(t_data["bracket"]):
                         with st.expander(f"Round {r_idx + 1}"):
                             for m_idx, match in enumerate(rnd):
+                                if not isinstance(match, list) or len(match) < 2: continue
                                 p1, p2 = match[0], match[1]
                                 if p2 == "BYE": st.text(f"{p1} (BYE)")
                                 else:
@@ -204,7 +213,12 @@ if selected_t != "-- Select --":
                                     idx = [None, p1, p2].index(t_data["winners"].get(k)) if t_data["winners"].get(k) in [p1, p2] else 0
                                     t_data["winners"][k] = st.selectbox(f"{p1} vs {p2}", [None, p1, p2], index=idx, key=k)
 
-                if st.button("💾 SAVE PROGRESS", use_container_width=True):
+                # --- FOOTER SYNC ---
+                st.divider()
+                if st.button("💾 SAVE ALL PROGRESS", use_container_width=True):
+                    t_data["last_sync"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
-                    save_db(df_db)
-                    st.toast("Progress Saved to Cloud!")
+                    if save_db(df_db):
+                        st.toast(f"Cloud Synced at {t_data['last_sync']}!")
+                
+                st.markdown(f"<div class='sync-time'>Last Cloud Sync: {t_data['last_sync']}</div>", unsafe_allow_html=True)
