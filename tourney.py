@@ -10,20 +10,32 @@ import re
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
-# --- SANITIZE PRIVATE KEY (The binascii fix) ---
-if "connections" in st.secrets and "gsheets" in st.secrets.connections:
-    secret_key = st.secrets.connections.gsheets.private_key
+# --- CONNECTION LOGIC (The "No-Touch" Secrets Fix) ---
+def get_connection():
+    # 1. Pull the raw secrets into a standard Python dictionary
+    # This allows us to modify the key without touching the read-only st.secrets
+    creds = dict(st.secrets.connections.gsheets)
+    
+    secret_key = creds.get("private_key", "")
+    
+    # 2. Clean up literal \n if they exist
     secret_key = secret_key.replace("\\n", "\n")
+    
+    # 3. Re-wrap the key if it's one long line (The binascii fix)
     if "-----BEGIN PRIVATE KEY-----" in secret_key and "\n" not in secret_key[28:-26]:
         header = "-----BEGIN PRIVATE KEY-----\n"
         footer = "\n-----END PRIVATE KEY-----"
         content = secret_key.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip()
         wrapped_content = "\n".join(re.findall(r'.{1,64}', content))
-        st.secrets.connections.gsheets.private_key = f"{header}{wrapped_content}{footer}"
+        secret_key = f"{header}{wrapped_content}{footer}"
+    
+    # Update our local dictionary with the fixed key
+    creds["private_key"] = secret_key
+    
+    # 4. Create the connection using the cleaned dictionary
+    return st.connection("gsheets", type=GSheetsConnection, **creds)
 
-# --- INITIALIZE CONNECTION ---
-conn = st.connection("gsheets", type=GSheetsConnection)
-
+conn = get_connection()
 # --- CSS FOR UI ---
 st.markdown("""
     <style>
