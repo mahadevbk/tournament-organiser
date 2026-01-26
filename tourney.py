@@ -5,6 +5,7 @@ import random
 import math
 import datetime
 import ast
+import re
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
