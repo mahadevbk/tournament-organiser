@@ -8,19 +8,19 @@ import datetime
 import re
 
 # ────────────────────────────────────────────────
-# PAGE CONFIG + FONT (Orbitron applied globally)
+# PAGE CONFIG + AUDIOWIDE FONT (applied globally)
 # ────────────────────────────────────────────────
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
 st.markdown("""
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
 <style>
-    /* Force Orbitron font across the entire app */
+    /* Force Audiowide font across the entire app */
     html, body, [data-testid="stAppViewContainer"], 
     [data-testid="stApp"], .stApp, .st-emotion-cache-1wivap2, 
     .st-emotion-cache-13ln4jf, .st-emotion-cache-1r6slb0,
     .st-emotion-cache-yw8pof, .st-emotion-cache-1y4p8pa {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* Headings & markdown */
@@ -31,21 +31,21 @@ st.markdown("""
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] div,
     [data-testid="stMarkdownContainer"] span {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* Tabs */
     .stTabs [data-baseweb="tab"],
     .stTabs [data-baseweb="tab"] > div,
     .stTabs [data-baseweb="tab-panel"] {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* Buttons */
     button.kindsbutton, .stButton > button,
     [kind="primary"] > button, [kind="secondary"] > button {
-        font-family: 'Orbitron', sans-serif !important;
-        font-weight: 600 !important;
+        font-family: 'Audiowide', sans-serif !important;
+        font-weight: normal !important;
     }
 
     /* Inputs, text areas, selectboxes, radio, etc. */
@@ -56,30 +56,30 @@ st.markdown("""
     .stNumberInput > div > div > input,
     .stRadio > div > label,
     .stCheckbox > div > label {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* Tables / Dataframes */
     .stDataFrame, .dataframe, td, th,
     [data-testid="stDataFrame"] *, 
     [data-testid="stTable"] * {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* Sidebar */
     section[data-testid="stSidebar"] *,
     .sidebar .sidebar-content * {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* Match cards & custom elements */
     .match-card, .player-row, .vs-divider, .court-header, .round-arrow {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 
     /* General fallback */
     * {
-        font-family: 'Orbitron', sans-serif !important;
+        font-family: 'Audiowide', sans-serif !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -119,7 +119,7 @@ def save_db(df):
         return False
 
 # ────────────────────────────────────────────────
-# GENERATORS
+# GENERATORS (unchanged)
 # ────────────────────────────────────────────────
 def generate_bracket(participants):
     names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
