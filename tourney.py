@@ -63,9 +63,7 @@ st.markdown(f"""
 def get_p_img(name, player_list):
     placeholder = 'https://www.gravatar.com/avatar/000?d=mp'
     if name in ["BYE", "TBD", None]: return placeholder
-    
     for p in player_list:
-        # Check if p is a dictionary (the new format)
         if isinstance(p, dict) and p.get('name') == name:
             url = p.get('img', '')
             if not url: return placeholder
@@ -90,12 +88,7 @@ def save_db(df):
 
 # --- TOURNAMENT LOGIC ---
 def generate_bracket(participants):
-    # Support both list of dicts and list of strings
-    names = []
-    for p in participants:
-        if isinstance(p, dict): names.append(p['name'])
-        else: names.append(str(p))
-    
+    names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
     names = [n.strip() for n in names if n.strip()]
     random.shuffle(names)
     if not names: return None
@@ -104,11 +97,7 @@ def generate_bracket(participants):
     return [full_slots[i:i+2] for i in range(0, len(full_slots), 2)]
 
 def generate_round_robin(participants):
-    names = []
-    for p in participants:
-        if isinstance(p, dict): names.append(p['name'])
-        else: names.append(str(p))
-    
+    names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
     names = [n.strip() for n in names if n.strip()]
     if len(names) < 2: return None
     if len(names) % 2 != 0: names.append("BYE")
@@ -141,11 +130,8 @@ if selected_t != "-- Select --":
     row = df_db[df_db["Tournament"] == selected_t]
     if not row.empty:
         t_data = ast.literal_eval(row["Data"].values[0])
-        
-        # --- DATA MIGRATION (Fixes the TypeError) ---
-        if "players" in t_data and len(t_data["players"]) > 0:
-            if isinstance(t_data["players"][0], str):
-                t_data["players"] = [{"name": p, "img": ""} for p in t_data["players"]]
+        if "players" in t_data and len(t_data["players"]) > 0 and isinstance(t_data["players"][0], str):
+            t_data["players"] = [{"name": p, "img": ""} for p in t_data["players"]]
 
         tab1, tab2, tab3 = st.tabs(["⚙️ SETUP", "📅 ORDER OF PLAY", "📊 PROGRESS"])
 
@@ -160,9 +146,7 @@ if selected_t != "-- Select --":
                 t_data["bracket"] = generate_bracket(t_data["players"]) if t_data["format"] == "Single Elimination" else generate_round_robin(t_data["players"])
                 t_data["winners"] = {}
                 df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
-                if save_db(df_db): 
-                    st.success("✅ Tournament Built!")
-                    st.rerun()
+                if save_db(df_db): st.rerun()
 
         with tab2:
             if t_data.get("bracket"):
@@ -173,7 +157,6 @@ if selected_t != "-- Select --":
                     p1_i, p2_i = get_p_img(match[0], t_data["players"]), get_p_img(match[1], t_data["players"])
                     with cols[i % len(cols)]:
                         st.markdown(f"<div class='match-card'><span class='court-header'>📍 {t_data['courts'][i % len(t_data['courts'])]}</span><div class='player-row'><img src='{p1_i}' class='player-avatar'> {match[0]}</div><div class='vs-divider'>vs</div><div class='player-row'><img src='{p2_i}' class='player-avatar'> {match[1]}</div></div>", unsafe_allow_html=True)
-            else: st.info("Please generate the tournament in SETUP.")
 
         with tab3:
             if t_data.get("bracket"):
@@ -196,22 +179,42 @@ if selected_t != "-- Select --":
                                 st.markdown(f"<img src='{get_p_img(match[0], t_data['players'])}' class='mini-avatar'> **{match[0]}** vs <img src='{get_p_img(match[1], t_data['players'])}' class='mini-avatar'> **{match[1]}**", unsafe_allow_html=True)
                                 t_data["winners"][k] = st.selectbox(f"Winner:", [None, match[0], match[1]], index=idx, key=k)
                 else:
-                    curr, r_num = t_data["bracket"], 1
-                    while len(curr) >= 1:
+                    # FIXED BRACKET PROGRESSION
+                    curr_round_matches = t_data["bracket"]
+                    r_num = 1
+                    while len(curr_round_matches) >= 1:
                         st.markdown(f"#### Round {r_num}")
-                        cols, nxt = st.columns(len(curr)), []
-                        for i, match in enumerate(curr):
+                        cols = st.columns(len(curr_round_matches))
+                        next_round_players = []
+                        for i, match in enumerate(curr_round_matches):
                             with cols[i]:
-                                if match[1] == "BYE": nxt.append(match[0]); st.success(f"⏩ {match[0]}")
-                                elif "TBD" in match: nxt.append("TBD"); st.caption("Waiting...")
-                                else:
-                                    st.markdown(f"<img src='{get_p_img(match[0], t_data['players'])}' class='mini-avatar'> vs <img src='{get_p_img(match[1], t_data['players'])}' class='mini-avatar'>", unsafe_allow_html=True)
-                                    k = f"r{r_num}_m{i}_{selected_t}"
-                                    win = st.selectbox(f"Select Winner", [None, match[0], match[1]], index=[None, match[0], match[1]].index(t_data["winners"].get(k)) if t_data["winners"].get(k) in match else 0, key=k)
-                                    t_data["winners"][k] = win; nxt.append(win if win else "TBD")
-                        if len(nxt) > 1: curr, r_num = [nxt[j:j+2] for j in range(0, len(nxt), 2)]; st.divider()
-                        else: 
-                            if nxt[0] not in ["TBD", None]: champion = nxt[0]
+                                if len(match) == 2:
+                                    p1, p2 = match[0], match[1]
+                                    if p2 == "BYE":
+                                        st.success(f"⏩ {p1}")
+                                        next_round_players.append(p1)
+                                    elif p1 == "TBD" or p2 == "TBD":
+                                        st.caption("Waiting...")
+                                        next_round_players.append("TBD")
+                                    else:
+                                        st.markdown(f"<img src='{get_p_img(p1, t_data['players'])}' class='mini-avatar'> vs <img src='{get_p_img(p2, t_data['players'])}' class='mini-avatar'>", unsafe_allow_html=True)
+                                        k = f"r{r_num}_m{i}_{selected_t}"
+                                        options = [None, p1, p2]
+                                        saved_val = t_data["winners"].get(k)
+                                        idx = options.index(saved_val) if saved_val in options else 0
+                                        win = st.selectbox(f"Winner", options, index=idx, key=k)
+                                        t_data["winners"][k] = win
+                                        next_round_players.append(win if win else "TBD")
+                        
+                        if len(next_round_players) > 1:
+                            # Group the winners into pairs for the next round
+                            curr_round_matches = [next_round_players[j:j+2] for j in range(0, len(next_round_players), 2)]
+                            r_num += 1
+                            st.divider()
+                        else:
+                            # We have reached the final winner
+                            if next_round_players and next_round_players[0] not in ["TBD", None]:
+                                champion = next_round_players[0]
                             break
 
                 if champion:
