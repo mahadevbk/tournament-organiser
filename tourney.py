@@ -8,7 +8,7 @@ import datetime
 import re
 
 # ────────────────────────────────────────────────
-# PAGE CONFIG + FUTURISTIC FONT
+# PAGE CONFIG + FUTURISTIC FONT (Orbitron)
 # ────────────────────────────────────────────────
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
@@ -39,6 +39,8 @@ st.markdown("""
         margin-bottom: 15px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         transition: all 0.2s;
+        text-align: center;
+        width: 100%;
     }
     .match-card:hover {
         transform: translateY(-6px);
@@ -47,9 +49,10 @@ st.markdown("""
     .player-row {
         display: flex;
         align-items: center;
-        gap: 15px;
         justify-content: center;
+        gap: 15px;
         color: white;
+        margin: 8px 0;
     }
     .player-avatar {
         width: 60px;
@@ -65,13 +68,14 @@ st.markdown("""
         object-fit: cover;
         border: 1px solid #4ade80;
         vertical-align: middle;
-        margin-right: 10px;
+        margin: 0 6px;
     }
     .vs-divider {
         color: rgba(255,255,255,0.4);
         font-style: italic;
         font-size: 1.1em;
         margin: 8px 0;
+        text-align: center;
     }
     .round-arrow {
         text-align: center;
@@ -86,6 +90,7 @@ st.markdown("""
         margin-bottom: 10px;
         font-weight: bold;
     }
+    /* Radio improvements */
     div.row-widget.stRadio > div {
         flex-direction: row;
         justify-content: space-around;
@@ -105,11 +110,6 @@ st.markdown("""
         background: rgba(74, 222, 128, 0.25) !important;
         border-color: #4ade80 !important;
         box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
-    }
-    div.row-widget.stRadio > div > label > div[data-testid="stCaption"] {
-        color: #94a3b8;
-        font-size: 0.85rem;
-        margin-top: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -149,7 +149,7 @@ def save_db(df):
         return False
 
 # ────────────────────────────────────────────────
-# GENERATORS
+# GENERATORS (unchanged)
 # ────────────────────────────────────────────────
 def generate_bracket(participants):
     names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
@@ -323,8 +323,7 @@ if selected_t != "-- Select --":
 
                     df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
                     if save_db(df_db):
-                        # Force fresh data
-                        df_db = load_db()
+                        df_db = load_db()  # force refresh
                         row = df_db[df_db["Tournament"] == selected_t]
                         if not row.empty:
                             t_data = ast.literal_eval(row["Data"].values[0])
@@ -361,30 +360,22 @@ if selected_t != "-- Select --":
                 else:
                     matches = t_data["bracket"] if isinstance(t_data["bracket"], list) else t_data["bracket"].get("winner", [])
                     matches = [m for m in matches if len(m) == 2 and "BYE" not in m]
-                    if matches:
-                        cols = st.columns(min(num_courts, 3))
-                        for i, m in enumerate(matches):
-                            with cols[i % len(cols)]:
-                                st.markdown(f"<div class='match-card'>"
-                                            f"<span class='court-header'>📍 {courts[i % num_courts]}</span>"
-                                            f"<div class='player-row'><img src='{get_p_img(m[0], t_data['players'])}' class='player-avatar'> {m[0]}</div>"
-                                            f"<div class='vs-divider'>vs</div>"
-                                            f"<div class='player-row'><img src='{get_p_img(m[1], t_data['players'])}' class='player-avatar'> {m[1]}</div>"
-                                            f"</div>", unsafe_allow_html=True)
-                    else:
-                        st.info("No active matches in current round.")
+                    cols = st.columns(min(num_courts, 3))
+                    for i, m in enumerate(matches):
+                        with cols[i % len(cols)]:
+                            st.markdown(f"<div class='match-card'>"
+                                        f"<span class='court-header'>📍 {courts[i % num_courts]}</span>"
+                                        f"<div class='player-row'><img src='{get_p_img(m[0], t_data['players'])}' class='player-avatar'> {m[0]}</div>"
+                                        f"<div class='vs-divider'>vs</div>"
+                                        f"<div class='player-row'><img src='{get_p_img(m[1], t_data['players'])}' class='player-avatar'> {m[1]}</div>"
+                                        f"</div>", unsafe_allow_html=True)
 
-        # ────── PROGRESS TAB ──────
+        # ────── PROGRESS TAB ────── (fixed centering)
         with tab3:
             st.subheader("Tournament Progress")
 
-            # Debug info – remove later if not needed
-            st.caption("Debug: bracket exists → " + str(t_data.get("bracket") is not None))
-            st.caption("Debug: format → " + str(t_data.get("format")))
-            st.caption("Debug: bracket type → " + str(type(t_data.get("bracket"))))
-
-            if t_data.get("bracket") is None or t_data["bracket"] == [] or t_data["bracket"] == {}:
-                st.info("No bracket generated yet. Please generate in SETUP tab.")
+            if t_data.get("bracket") is None:
+                st.info("No bracket generated yet.")
             else:
                 # Clean stale winners
                 valid_names = {p["name"] for p in t_data["players"]} | {"BYE"}
@@ -412,11 +403,19 @@ if selected_t != "-- Select --":
                             for m_idx, match in enumerate(rnd):
                                 if len(match) < 2 or match[1] == "BYE": continue
                                 k = f"rr_r{r_idx}_m{m_idx}_{selected_t}"
-                                st.markdown(f"<div class='match-card'>"
-                                            f"<div class='player-row'><img src='{get_p_img(match[0], t_data['players'])}' class='player-avatar'> **{match[0]}**</div>"
-                                            f"<div class='vs-divider'>vs</div>"
-                                            f"<div class='player-row'><img src='{get_p_img(match[1], t_data['players'])}' class='player-avatar'> **{match[1]}**</div>"
-                                            f"</div>", unsafe_allow_html=True)
+                                st.markdown(f"""
+                                <div class="match-card">
+                                    <div class="player-row">
+                                        <img src="{get_p_img(match[0], t_data['players'])}" class="player-avatar"> 
+                                        <strong>{match[0]}</strong>
+                                    </div>
+                                    <div class="vs-divider">vs</div>
+                                    <div class="player-row">
+                                        <img src="{get_p_img(match[1], t_data['players'])}" class="player-avatar"> 
+                                        <strong>{match[1]}</strong>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
                                 c1, c2 = st.columns([3, 4])
                                 with c1:
                                     options = [None, match[0], match[1]]
@@ -437,11 +436,19 @@ if selected_t != "-- Select --":
                                     saved = t_data["winners"].get(k)
                                     options = [None, match[0], match[1]]
                                     idx = options.index(saved) if saved in options else 0
-                                    st.markdown(f"<div class='match-card'>"
-                                                f"<div class='player-row'><img src='{get_p_img(match[0], t_data['players'])}' class='mini-avatar'> **{match[0]}**</div>"
-                                                f"<div class='vs-divider'>vs</div>"
-                                                f"<div class='player-row'><img src='{get_p_img(match[1], t_data['players'])}' class='mini-avatar'> **{match[1]}**</div>"
-                                                f"</div>", unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                    <div class="match-card">
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[0], t_data['players'])}" class="mini-avatar"> 
+                                            <strong>{match[0]}</strong>
+                                        </div>
+                                        <div class="vs-divider">vs</div>
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[1], t_data['players'])}" class="mini-avatar"> 
+                                            <strong>{match[1]}</strong>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
                                     c1, c2 = st.columns([3, 4])
                                     with c1:
                                         sel = st.selectbox("Winner", options, index=idx, key=f"win_{k}")
@@ -457,7 +464,7 @@ if selected_t != "-- Select --":
                                 column_config={"Avatar": st.column_config.ImageColumn(width="small")}
                             )
 
-                else:  # Single Elimination or Double Elimination
+                else:  # Single / Double Elimination
                     bracket_data = t_data["bracket"] if isinstance(t_data["bracket"], list) else t_data["bracket"].get("winner", [])
                     curr_round = bracket_data
                     round_num = 1
@@ -475,11 +482,19 @@ if selected_t != "-- Select --":
                                     next_round.append("TBD")
                                 else:
                                     k = f"r{round_num}_m{i}_{selected_t}"
-                                    st.markdown(f"<div class='match-card'>"
-                                                f"<div class='player-row'><img src='{get_p_img(match[0], t_data['players'])}' class='player-avatar'> {match[0]}</div>"
-                                                f"<div class='vs-divider'>vs</div>"
-                                                f"<div class='player-row'><img src='{get_p_img(match[1], t_data['players'])}' class='player-avatar'> {match[1]}</div>"
-                                                f"</div>", unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                    <div class="match-card">
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[0], t_data['players'])}" class="player-avatar"> 
+                                            <strong>{match[0]}</strong>
+                                        </div>
+                                        <div class="vs-divider">vs</div>
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[1], t_data['players'])}" class="player-avatar"> 
+                                            <strong>{match[1]}</strong>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
                                     options = [None, match[0], match[1]]
                                     saved = t_data["winners"].get(k)
                                     idx = options.index(saved) if saved in options else 0
@@ -498,14 +513,13 @@ if selected_t != "-- Select --":
 
                 if champion:
                     st.balloons()
-                    st.markdown(
-                        f"<div style='text-align:center; padding:30px; background:linear-gradient(45deg,#ca8a04,#fbbf24); border-radius:16px; color:#0f172a;'>"
-                        f"<div style='font-size:1.8em;'>🏆 CHAMPION 🏆</div>"
-                        f"<img src='{get_p_img(champion, t_data['players'])}' style='width:120px;height:120px;border-radius:50%;border:4px solid #0f172a;margin:15px 0;'>"
-                        f"<div style='font-size:2.2em;font-weight:bold;'>{champion}</div>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f"""
+                    <div style="text-align:center; padding:40px; background:linear-gradient(45deg,#ca8a04,#fbbf24); border-radius:20px; color:#0f172a; margin:20px 0;">
+                        <div style="font-size:1.8em;">🏆 CHAMPION 🏆</div>
+                        <img src="{get_p_img(champion, t_data['players'])}" style="width:140px;height:140px;border-radius:50%;border:5px solid #0f172a;margin:20px 0;">
+                        <div style="font-size:2.4em;font-weight:bold;">{champion}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 if st.button("💾 SAVE PROGRESS", type="primary", use_container_width=True):
                     t_data["last_sync"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
