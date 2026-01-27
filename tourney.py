@@ -86,6 +86,13 @@ st.markdown("""
         justify-content: center;
     }
     .court-header::before { content: "🎾"; }
+    .round-arrow {
+        text-align: center;
+        color: #4ade80;
+        font-size: 2.5em;
+        margin: 30px 0;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,6 +176,7 @@ if not tournament_list:
     st.warning("No tournaments available yet.")
     st.stop()
 
+# Auto-select if only one tournament
 default_index = 0 if len(tournament_list) == 1 else None
 selected_t = st.selectbox(
     "Select a tournament",
@@ -268,10 +276,24 @@ if selected_t:
                         st.balloons()
                         st.rerun()
 
-        # ── Main tabs ──
+                # Delete tournament (admin only)
+                st.markdown("---")
+                st.subheader("Danger Zone")
+                delete_confirm = st.checkbox("Confirm: permanently delete this tournament")
+                if delete_confirm and st.button("🗑️ Delete Tournament", type="primary"):
+                    df_db = df_db[df_db["Tournament"] != selected_t]
+                    if save_db(df_db):
+                        st.success(f"Tournament **{selected_t}** deleted!")
+                        if "tournament_select_main" in st.session_state:
+                            del st.session_state["tournament_select_main"]
+                        st.rerun()
+                    else:
+                        st.error("Delete failed – check connection")
+
+        # ── Main tabs: Progress first, Order of Play second ──
         tab_progress, tab_order = st.tabs(["📊 PROGRESS", "📅 ORDER OF PLAY"])
 
-        # ────── PROGRESS (first tab – full interactive UI restored) ──────
+        # ────── PROGRESS (first tab – full interactive UI) ──────
         with tab_progress:
             st.subheader(f"Progress: {selected_t}")
 
@@ -465,5 +487,3 @@ if selected_t:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
-
-                st.info("Court assignment & scheduling UI ready")
