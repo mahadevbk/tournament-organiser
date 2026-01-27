@@ -36,62 +36,54 @@ st.markdown(f"""
     .stTabs [data-baseweb="tab"] {{ height: 50px; color: #ffffff; font-weight: 600; }}
     .stTabs [aria-selected="true"] {{ background-color: #001e5c !important; border-bottom: 2px solid #4ade80 !important; }}
     
+    /* Champion Display */
+    .champ-container {{
+        text-align: center; background: linear-gradient(135deg, #022e85 0%, #001e5c 100%);
+        padding: 40px; border-radius: 20px; border: 3px solid #ffd700; margin: 20px 0;
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+    }}
+    .champ-avatar {{
+        width: 150px; height: 150px; border-radius: 50%; object-fit: cover;
+        border: 5px solid #ffd700; margin-bottom: 15px;
+    }}
+    .champ-name {{ color: #ffd700; font-size: 2.5em; font-weight: bold; text-transform: uppercase; }}
+    
     .match-card {{
         background: rgba(2, 46, 133, 0.8); border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 20px; border-radius: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        display: flex; flex-direction: column; align-items: center;
+        padding: 20px; border-radius: 15px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center;
     }}
-    .court-header {{ color: #4ade80 !important; font-size: 0.8em; text-transform: uppercase; margin-bottom: 12px; font-weight: bold; }}
-    .player-row {{ display: flex; align-items: center; gap: 15px; width: 100%; justify-content: center; margin: 8px 0; }}
-    .player-avatar {{
-        width: 50px; height: 50px; border-radius: 50%; object-fit: cover;
-        border: 2px solid #4ade80; background-color: #022e85;
-    }}
-    /* Smaller avatar for progress tab lists */
-    .mini-avatar {{
-        width: 30px; height: 30px; border-radius: 50%; object-fit: cover;
-        border: 1px solid #4ade80; vertical-align: middle; margin-right: 8px;
-    }}
-    .player-name {{ color: #ffffff; font-size: 1.1em; font-weight: 500; min-width: 100px; }}
-    .vs-divider {{ color: rgba(255,255,255,0.3); font-style: italic; font-size: 0.9em; margin: 5px 0; }}
+    .player-avatar {{ width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #4ade80; }}
+    .mini-avatar {{ width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 1px solid #4ade80; vertical-align: middle; }}
     .sync-time {{ font-size: 0.8em; color: #4ade80; opacity: 0.8; margin-top: 10px; }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- DATABASE HELPERS ---
-def load_db():
-    try:
-        df = conn.read(ttl=0)
-        if df is None or df.empty or "Tournament" not in df.columns:
-            return pd.DataFrame(columns=["Tournament", "Data"])
-        return df
-    except:
-        return pd.DataFrame(columns=["Tournament", "Data"])
-
-def save_db(df):
-    try:
-        conn.update(data=df)
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Sync Error: {e}")
-        return False
-
 # --- UTILITY: GOOGLE DRIVE IMAGE CONVERTER ---
 def get_p_img(name, player_list):
     placeholder = 'https://www.gravatar.com/avatar/000?d=mp'
-    if name == "BYE" or name == "TBD": return placeholder
+    if name in ["BYE", "TBD", None]: return placeholder
     for p in player_list:
         if p['name'] == name:
             url = p.get('img', '')
             if not url: return placeholder
             if "drive.google.com" in url:
                 match = re.search(r'/d/([^/]+)', url)
-                if match:
-                    file_id = match.group(1)
-                    return f"https://drive.google.com/uc?export=view&id={file_id}"
+                if match: return f"https://drive.google.com/uc?export=view&id={match.group(1)}"
             return url
     return placeholder
+
+def load_db():
+    try:
+        df = conn.read(ttl=0)
+        return df if df is not None and not df.empty else pd.DataFrame(columns=["Tournament", "Data"])
+    except: return pd.DataFrame(columns=["Tournament", "Data"])
+
+def save_db(df):
+    try:
+        conn.update(data=df)
+        st.cache_data.clear()
+        return True
+    except: return False
 
 # --- TOURNAMENT LOGIC ---
 def generate_bracket(participants):
@@ -100,23 +92,16 @@ def generate_bracket(participants):
     if not names: return None
     next_pow_2 = 2**math.ceil(math.log2(len(names)))
     full_slots = names + (["BYE"] * (next_pow_2 - len(names)))
-    bracket = []
-    for i in range(next_pow_2 // 2):
-        bracket.append([full_slots[i], full_slots[next_pow_2 - 1 - i]])
-    return bracket
+    return [full_slots[i:i+2] for i in range(0, len(full_slots), 2)] if len(names) > 0 else None
 
 def generate_round_robin(participants):
     names = [p['name'] for p in participants if p['name'].strip()]
     if len(names) < 2: return None
     if len(names) % 2 != 0: names.append("BYE")
-    n = len(names)
-    rounds = []
+    n, rounds = len(names), []
     p_list = names[:]
     for i in range(n - 1):
-        matches = []
-        for j in range(n // 2):
-            matches.append([p_list[j], p_list[n - 1 - j]])
-        rounds.append(matches)
+        rounds.append([[p_list[j], p_list[n - 1 - j]] for j in range(n // 2)])
         p_list = [p_list[0]] + [p_list[-1]] + p_list[1:-1]
     return rounds
 
@@ -130,46 +115,26 @@ with st.sidebar:
     new_t = st.text_input("Tournament Name")
     if st.button("✨ Create New"):
         if new_t and new_t not in tournament_list:
-            init_data = {
-                "players": [{"name": f"Player {i+1}", "img": ""} for i in range(4)], 
-                "courts": ["Court 1"], "format": "Single Elimination", "bracket": None, 
-                "winners": {}, "locked": False, "last_sync": "Never"
-            }
-            new_row = pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])
-            if save_db(pd.concat([df_db, new_row], ignore_index=True)): st.rerun()
-
-    selected_t = st.selectbox("Select Active Tournament", ["-- Select --"] + tournament_list)
+            init_data = {"players": [{"name": f"Player {i+1}", "img": ""} for i in range(4)], "courts": ["Court 1"], "format": "Single Elimination", "bracket": None, "winners": {}, "locked": False, "last_sync": "Never"}
+            if save_db(pd.concat([df_db, pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])], ignore_index=True)): st.rerun()
+    selected_t = st.selectbox("Select Tournament", ["-- Select --"] + tournament_list)
     if selected_t != "-- Select --":
-        st.divider()
-        if st.button("🗑️ Delete Tournament", type="secondary", width="stretch"):
+        if st.button("🗑️ Delete", type="secondary", width="stretch"):
             if save_db(df_db[df_db["Tournament"] != selected_t]): st.rerun()
 
 if selected_t != "-- Select --":
     row = df_db[df_db["Tournament"] == selected_t]
     if not row.empty:
         t_data = ast.literal_eval(row["Data"].values[0])
-        
-        # Migration check for old data
-        if t_data.get("players") and isinstance(t_data["players"][0], str):
-            t_data["players"] = [{"name": p, "img": ""} for p in t_data["players"]]
-
         tab1, tab2, tab3 = st.tabs(["⚙️ SETUP", "📅 ORDER OF PLAY", "📊 PROGRESS"])
 
         with tab1:
-            st.markdown("### 🛠️ Configuration")
             t_data["locked"] = st.toggle("🔒 Lock Tournament", value=t_data.get("locked", False))
-            st.info("💡 **Google Drive Images:** Set folder/file to **'Anyone with the link'** before pasting.")
-            
-            t_data["format"] = st.radio("Format", ["Single Elimination", "Round Robin"], 
-                                       index=0 if t_data.get("format") == "Single Elimination" else 1, 
-                                       disabled=t_data["locked"], horizontal=True)
-            
-            t_data["players"] = st.data_editor(t_data["players"], num_rows="dynamic", key=f"p_{selected_t}", disabled=t_data["locked"], width="stretch",
-                column_config={"img": st.column_config.ImageColumn("Avatar Preview"), "name": "Player Name"})
-            
+            st.info("💡 **Google Drive:** Paste share link set to 'Anyone with the link'.")
+            t_data["format"] = st.radio("Format", ["Single Elimination", "Round Robin"], index=0 if t_data.get("format") == "Single Elimination" else 1, disabled=t_data["locked"], horizontal=True)
+            t_data["players"] = st.data_editor(t_data["players"], num_rows="dynamic", key=f"p_{selected_t}", disabled=t_data["locked"], width="stretch", column_config={"img": st.column_config.ImageColumn("Avatar"), "name": "Name"})
             t_data["courts"] = st.data_editor(t_data["courts"], num_rows="dynamic", key=f"c_{selected_t}", disabled=t_data["locked"], width="stretch")
-            
-            if st.button("🚀 GENERATE & INITIALIZE", type="primary", width="stretch", disabled=t_data["locked"]):
+            if st.button("🚀 GENERATE", type="primary", width="stretch", disabled=t_data["locked"]):
                 t_data["bracket"] = generate_bracket(t_data["players"]) if t_data["format"] == "Single Elimination" else generate_round_robin(t_data["players"])
                 t_data["winners"] = {}
                 df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
@@ -177,80 +142,64 @@ if selected_t != "-- Select --":
 
         with tab2:
             if t_data.get("bracket"):
-                active = t_data["bracket"] if t_data["format"] == "Single Elimination" else t_data["bracket"][0]
-                active = [m for m in active if isinstance(m, list) and len(m) == 2 and "BYE" not in m]
-                
+                active = (t_data["bracket"] if t_data["format"] == "Single Elimination" else t_data["bracket"][0])
+                active = [m for m in active if len(m) == 2 and "BYE" not in m]
                 cols = st.columns(min(len(t_data["courts"]), 3))
                 for i, match in enumerate(active):
-                    p1_n, p2_n = match[0], match[1]
-                    p1_i, p2_i = get_p_img(p1_n, t_data["players"]), get_p_img(p2_n, t_data["players"])
+                    p1_i, p2_i = get_p_img(match[0], t_data["players"]), get_p_img(match[1], t_data["players"])
                     with cols[i % len(cols)]:
-                        st.markdown(f"<div class='match-card'><span class='court-header'>📍 {t_data['courts'][i % len(t_data['courts'])]}</span><div class='player-row'><img src='{p1_i}' class='player-avatar'><span class='player-name'>{p1_n}</span></div><div class='vs-divider'>vs</div><div class='player-row'><img src='{p2_i}' class='player-avatar'><span class='player-name'>{p2_n}</span></div></div>", unsafe_allow_html=True)
-            else: st.info("Setup the tournament first.")
+                        st.markdown(f"<div class='match-card'><span class='court-header'>📍 {t_data['courts'][i % len(t_data['courts'])]}</span><div class='player-row'><img src='{p1_i}' class='player-avatar'> {match[0]}</div><div class='vs-divider'>vs</div><div class='player-row'><img src='{p2_i}' class='player-avatar'> {match[1]}</div></div>", unsafe_allow_html=True)
 
         with tab3:
             if t_data.get("bracket"):
+                champion = None
                 if t_data["format"] == "Round Robin":
-                    # Leaderboard with images
                     wins = {p['name']: 0 for p in t_data["players"] if p['name'] != "BYE"}
-                    for k, v in t_data["winners"].items():
-                        if v and v in wins: wins[v] += 1
-                    ld_data = [{"Avatar": get_p_img(n, t_data["players"]), "Player": n, "Wins": w} for n, w in wins.items()]
-                    leader_df = pd.DataFrame(ld_data).sort_values(by="Wins", ascending=False)
-                    st.dataframe(leader_df, hide_index=True, width="stretch", column_config={"Avatar": st.column_config.ImageColumn()})
+                    for k, v in t_data["winners"].items(): 
+                        if v in wins: wins[v] += 1
+                    ld_df = pd.DataFrame([{"Avatar": get_p_img(n, t_data["players"]), "Player": n, "Wins": w} for n, w in wins.items()]).sort_values(by="Wins", ascending=False)
+                    st.dataframe(ld_df, hide_index=True, width="stretch", column_config={"Avatar": st.column_config.ImageColumn()})
+                    if not ld_df.empty and ld_df.iloc[0]['Wins'] > 0: champion = ld_df.iloc[0]['Player']
                     
-                    # Schedule with MINI AVATARS
                     for r_idx, rnd in enumerate(t_data["bracket"]):
                         with st.expander(f"Round {r_idx + 1}"):
                             for m_idx, match in enumerate(rnd):
                                 if len(match) < 2: continue
-                                p1, p2 = match[0], match[1]
-                                if p2 == "BYE": st.markdown(f"<img src='{get_p_img(p1, t_data['players'])}' class='mini-avatar'> {p1} (BYE)", unsafe_allow_html=True)
-                                else:
-                                    k = f"rr_r{r_idx}_m{m_idx}_{selected_t}"
-                                    cur_win = t_data["winners"].get(k)
-                                    idx = [None, p1, p2].index(cur_win) if cur_win in [p1, p2] else 0
-                                    st.markdown(f"**Match {m_idx+1}**", unsafe_allow_html=True)
-                                    c_left, c_right = st.columns([0.1, 0.9])
-                                    with c_left: 
-                                        st.markdown(f"<img src='{get_p_img(p1, t_data['players'])}' class='mini-avatar'><br><br><img src='{get_p_img(p2, t_data['players'])}' class='mini-avatar'>", unsafe_allow_html=True)
-                                    with c_right:
-                                        t_data["winners"][k] = st.selectbox(f"Winner: {p1} vs {p2}", [None, p1, p2], index=idx, key=k)
+                                k = f"rr_r{r_idx}_m{m_idx}_{selected_t}"
+                                cur_win = t_data["winners"].get(k)
+                                idx = [None, match[0], match[1]].index(cur_win) if cur_win in match else 0
+                                st.markdown(f"<img src='{get_p_img(match[0], t_data['players'])}' class='mini-avatar'> vs <img src='{get_p_img(match[1], t_data['players'])}' class='mini-avatar'>", unsafe_allow_html=True)
+                                t_data["winners"][k] = st.selectbox(f"Winner: {match[0]} vs {match[1]}", [None, match[0], match[1]], index=idx, key=k)
                 else:
-                    # Single Elimination with MINI AVATARS
-                    current_round = t_data["bracket"]
-                    r_num = 1
-                    while len(current_round) >= 1:
+                    curr, r_num = t_data["bracket"], 1
+                    while len(curr) >= 1:
                         st.markdown(f"#### Round {r_num}")
-                        cols = st.columns(len(current_round))
-                        nxt_rnd = []
-                        for i, match in enumerate(current_round):
-                            if len(match) < 2: continue
+                        cols, nxt = st.columns(len(curr)), []
+                        for i, match in enumerate(curr):
                             with cols[i]:
-                                p1, p2 = match[0], match[1]
-                                if p2 == "BYE":
-                                    st.markdown(f"<img src='{get_p_img(p1, t_data['players'])}' class='mini-avatar'> ⏩ **{p1}**", unsafe_allow_html=True)
-                                    nxt_rnd.append(p1)
-                                elif p1 == "TBD" or p2 == "TBD":
-                                    st.caption("Waiting...")
-                                    nxt_rnd.append("TBD")
+                                if match[1] == "BYE": nxt.append(match[0]); st.success(f"⏩ {match[0]}")
+                                elif "TBD" in match: nxt.append("TBD"); st.caption("Waiting...")
                                 else:
-                                    st.markdown(f"<img src='{get_p_img(p1, t_data['players'])}' class='mini-avatar'> vs <img src='{get_p_img(p2, t_data['players'])}' class='mini-avatar'>", unsafe_allow_html=True)
+                                    st.markdown(f"<img src='{get_p_img(match[0], t_data['players'])}' class='mini-avatar'> vs <img src='{get_p_img(match[1], t_data['players'])}' class='mini-avatar'>", unsafe_allow_html=True)
                                     k = f"r{r_num}_m{i}_{selected_t}"
-                                    cur_win = t_data["winners"].get(k)
-                                    idx = [None, p1, p2].index(cur_win) if cur_win in [p1, p2] else 0
-                                    win = st.selectbox(f"{p1} vs {p2}", [None, p1, p2], index=idx, key=k, disabled=t_data["locked"])
-                                    t_data["winners"][k] = win
-                                    nxt_rnd.append(win if win else "TBD")
-                        if len(nxt_rnd) > 1:
-                            current_round = [nxt_rnd[j:j+2] for j in range(0, len(nxt_rnd), 2)]
-                            r_num += 1
-                        else:
-                            if nxt_rnd and nxt_rnd[0] not in ["TBD", None]: st.success(f"🏆 Champion: {nxt_rnd[0]}")
+                                    win = st.selectbox(f"Winner", [None, match[0], match[1]], index=[None, match[0], match[1]].index(t_data["winners"].get(k)) if t_data["winners"].get(k) in match else 0, key=k)
+                                    t_data["winners"][k] = win; nxt.append(win if win else "TBD")
+                        if len(nxt) > 1: curr, r_num = [nxt[j:j+2] for j in range(0, len(nxt), 2)]; st.divider()
+                        else: 
+                            if nxt[0] not in ["TBD", None]: champion = nxt[0]
                             break
 
-                if st.button("💾 SAVE ALL PROGRESS", type="primary", width="stretch"):
+                if champion:
+                    st.balloons()
+                    st.markdown(f"""
+                        <div class='champ-container'>
+                            <div style='color: #ffd700; font-size: 1.2em; letter-spacing: 2px;'>🏆 TOURNAMENT CHAMPION 🏆</div>
+                            <img src='{get_p_img(champion, t_data['players'])}' class='champ-avatar'>
+                            <div class='champ-name'>{champion}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                if st.button("💾 SAVE PROGRESS", type="primary", width="stretch"):
                     t_data["last_sync"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
-                    if save_db(df_db): st.toast(f"Cloud Synced at {t_data['last_sync']}")
-                st.markdown(f"<div class='sync-time'>Last Cloud Sync: {t_data['last_sync']}</div>", unsafe_allow_html=True)
+                    save_db(df_db); st.toast("Synced!")
