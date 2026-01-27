@@ -46,6 +46,10 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(0,0,0,0.35);
         text-align: center;
     }
+    .match-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 10px 25px rgba(34, 197, 94, 0.3);
+    }
     .player-row {
         display: flex;
         align-items: center;
@@ -161,7 +165,6 @@ st.title("🎾 Tennis Tournament Organiser")
 df_db = load_db()
 tournament_list = df_db["Tournament"].dropna().unique().tolist()
 
-# Tournament selection dropdown (first thing user sees)
 if not tournament_list:
     st.warning("No tournaments available yet.")
     st.stop()
@@ -180,7 +183,6 @@ if selected_t:
     if not row.empty:
         t_data = ast.literal_eval(row["Data"].values[0])
 
-        # Ensure keys exist
         defaults = {
             "scores": {}, "winners": {}, "players": [], "courts": ["Court 1"],
             "format": "Single Elimination", "locked": False, "bracket": None,
@@ -214,7 +216,6 @@ if selected_t:
                     st.session_state.setup_authorized = False
                     st.rerun()
 
-                # ── Setup section (only for admin) ──
                 st.subheader("Tournament Setup (Admin)")
                 t_data["locked"] = st.toggle("Lock tournament", value=t_data.get("locked", False))
 
@@ -268,27 +269,61 @@ if selected_t:
                         st.balloons()
                         st.rerun()
 
-        # ── Main tabs: Progress first, then Order of Play ──
+        # ── Main tabs: Progress first, Order of Play second ──
         tab_progress, tab_order = st.tabs(["📊 PROGRESS", "📅 ORDER OF PLAY"])
 
         # ────── PROGRESS (first tab) ──────
         with tab_progress:
             st.subheader(f"Progress: {selected_t}")
+
             if t_data.get("bracket") is None:
                 st.info("No bracket generated yet. (Admin can generate via sidebar)")
             else:
-                # Example progress content (replace with your full progress logic)
-                st.success("Bracket loaded")
-                st.json(t_data.get("bracket"))  # temporary preview - remove later
-                # Add your leaderboard, match inputs, champion display here...
+                st.success("Tournament progress loaded")
+
+                # Example: simple list of matches (expand with your full logic)
+                st.markdown("**Current matches / bracket:**")
+                bracket_data = t_data["bracket"] if isinstance(t_data["bracket"], list) else t_data["bracket"].get("winner", [])
+                for i, match in enumerate(bracket_data):
+                    if len(match) == 2:
+                        st.markdown(f"Match {i+1}: {match[0]} vs {match[1]}")
+
+                # Add your full progress UI here (wins, leaderboard, score inputs, etc.)
+                st.info("Full scoring and leaderboard coming soon")
 
         # ────── ORDER OF PLAY ──────
         with tab_order:
             st.subheader(f"Order of Play: {selected_t}")
+
             if t_data.get("bracket") is None:
                 st.info("No bracket generated yet.")
             else:
-                # Example order of play content (replace with your full logic)
-                st.success("Matches loaded")
-                st.json(t_data.get("bracket"))  # temporary preview - remove later
-                # Add your match cards, court assignment here...
+                st.success("Matches ready for scheduling")
+
+                matches = t_data["bracket"] if isinstance(t_data["bracket"], list) else t_data["bracket"].get("winner", [])
+                matches = [m for m in matches if len(m) == 2 and "BYE" not in m]
+
+                num_courts = len(t_data["courts"]) or 1
+                courts = t_data["courts"] or ["Court 1"]
+
+                cols = st.columns(2)
+                for i, match in enumerate(matches):
+                    col = cols[i % 2]
+                    court = courts[i % num_courts]
+                    with col:
+                        st.markdown(f"""
+                        <div class="match-card">
+                            <div class="court-header">Court {court}</div>
+                            <div class="player-row">
+                                <img src="{get_p_img(match[0], t_data['players'])}" class="player-avatar">
+                                <strong>{match[0]}</strong>
+                            </div>
+                            <div class="vs-divider">VS</div>
+                            <div class="player-row">
+                                <img src="{get_p_img(match[1], t_data['players'])}" class="player-avatar">
+                                <strong>{match[1]}</strong>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                st.info("Court assignment UI coming soon")
