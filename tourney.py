@@ -86,6 +86,13 @@ st.markdown("""
         justify-content: center;
     }
     .court-header::before { content: "🎾"; }
+    .round-arrow {
+        text-align: center;
+        color: #4ade80;
+        font-size: 2.5em;
+        margin: 30px 0;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,7 +131,7 @@ def save_db(df):
         return False
 
 # ────────────────────────────────────────────────
-# GENERATORS (unchanged)
+# GENERATORS
 # ────────────────────────────────────────────────
 def generate_bracket(participants):
     names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
@@ -169,7 +176,6 @@ if not tournament_list:
     st.warning("No tournaments available yet. Create one in the sidebar.")
     st.stop()
 
-# Auto-select if only one tournament
 default_index = 0 if len(tournament_list) == 1 else None
 selected_t = st.selectbox(
     "Select a tournament",
@@ -244,7 +250,6 @@ if selected_t:
                     st.session_state.setup_authorized = False
                     st.rerun()
 
-                # ── Setup controls (only when authorized) ──
                 t_data["locked"] = st.toggle("Lock tournament", value=t_data.get("locked", False))
 
                 st.markdown("### Format")
@@ -321,6 +326,7 @@ if selected_t:
             if t_data.get("bracket") is None:
                 st.info("No bracket generated yet. (Admin can generate via sidebar)")
             else:
+                # Clean stale winners
                 valid_names = {p["name"] for p in t_data["players"]} | {"BYE"}
                 to_remove = [k for k, v in t_data["winners"].items() if v not in valid_names and v is not None]
                 for k in to_remove:
@@ -368,7 +374,91 @@ if selected_t:
                                 with c2:
                                     t_data["scores"][k] = st.text_input("Score", t_data["scores"].get(k, ""), key=f"score_{k}")
 
-                # ... (add Group Stage and Knockout progress logic similarly if needed)
+                elif t_data["format"] == "Group Stage + Knockout" and isinstance(t_data["bracket"], dict):
+                    for g_idx, group_players in enumerate(t_data["bracket"].get("groups", [])):
+                        with st.expander(f"Group {g_idx+1} – {', '.join(group_players)}"):
+                            wins = {p: 0 for p in group_players}
+                            for r_idx, rnd in enumerate(t_data["bracket"]["group_matches"][g_idx]):
+                                for m_idx, match in enumerate(rnd):
+                                    if len(match) < 2 or match[1] == "BYE": continue
+                                    k = f"group{g_idx}_r{r_idx}_m{m_idx}_{selected_t}"
+                                    saved = t_data["winners"].get(k)
+                                    options = [None, match[0], match[1]]
+                                    idx = options.index(saved) if saved in options else 0
+                                    st.markdown(f"""
+                                    <div class="match-card">
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[0], t_data['players'])}" class="mini-avatar"> 
+                                            <strong>{match[0]}</strong>
+                                        </div>
+                                        <div class="vs-divider">VS</div>
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[1], t_data['players'])}" class="mini-avatar"> 
+                                            <strong>{match[1]}</strong>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    c1, c2 = st.columns([3, 4])
+                                    with c1:
+                                        sel = st.selectbox("Winner", options, index=idx, key=f"win_{k}")
+                                        t_data["winners"][k] = sel
+                                        if sel: wins[sel] += 1
+                                    with c2:
+                                        t_data["scores"][k] = st.text_input("Score", t_data["scores"].get(k, ""), key=f"score_{k}")
+                            st.dataframe(
+                                pd.DataFrame([{"Avatar": get_p_img(p, t_data["players"]), "Player": p, "Wins": w} for p, w in wins.items()])
+                                  .sort_values("Wins", ascending=False),
+                                hide_index=True,
+                                use_container_width=True,
+                                column_config={"Avatar": st.column_config.ImageColumn(width="small")}
+                            )
+
+                else:  # Single / Double Elimination
+                    bracket_data = t_data["bracket"] if isinstance(t_data["bracket"], list) else t_data["bracket"].get("winner", [])
+                    curr_round = bracket_data
+                    round_num = 1
+                    while len(curr_round) > 0:
+                        st.markdown(f"#### Round {round_num}")
+                        cols = st.columns(max(1, min(4, len(curr_round))))
+                        next_round = []
+                        for i, match in enumerate(curr_round):
+                            with cols[i % len(cols)]:
+                                if match[1] == "BYE":
+                                    st.success(f"→ {match[0]} advances (BYE)")
+                                    next_round.append(match[0])
+                                elif "TBD" in match:
+                                    st.caption("Waiting...")
+                                    next_round.append("TBD")
+                                else:
+                                    k = f"r{round_num}_m{i}_{selected_t}"
+                                    st.markdown(f"""
+                                    <div class="match-card">
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[0], t_data['players'])}" class="player-avatar"> 
+                                            <strong>{match[0]}</strong>
+                                        </div>
+                                        <div class="vs-divider">VS</div>
+                                        <div class="player-row">
+                                            <img src="{get_p_img(match[1], t_data['players'])}" class="player-avatar"> 
+                                            <strong>{match[1]}</strong>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    options = [None, match[0], match[1]]
+                                    saved = t_data["winners"].get(k)
+                                    idx = options.index(saved) if saved in options else 0
+                                    sel = st.selectbox("Winner", options, index=idx, key=f"win_{k}")
+                                    t_data["winners"][k] = sel
+                                    t_data["scores"][k] = st.text_input("Score", t_data["scores"].get(k, ""), key=f"score_{k}")
+                                    next_round.append(sel if sel else "TBD")
+                        if len(next_round) > 1:
+                            curr_round = [next_round[j:j+2] for j in range(0, len(next_round), 2)]
+                            round_num += 1
+                            st.markdown("<div class='round-arrow'>↓ NEXT ROUND ↓</div>", unsafe_allow_html=True)
+                        else:
+                            if next_round and next_round[0] not in ["TBD", None, ""]:
+                                champion = next_round[0]
+                            break
 
                 if champion:
                     st.balloons()
