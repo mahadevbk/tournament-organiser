@@ -172,8 +172,36 @@ st.title("🎾 Tennis Tournament Organiser")
 df_db = load_db()
 tournament_list = df_db["Tournament"].dropna().unique().tolist()
 
+# ── Create new tournament – always visible in sidebar ──
+with st.sidebar:
+    st.header("Admin Desk")
+    st.subheader("Create New Tournament")
+    new_t = st.text_input("Tournament Name", key="new_t_name")
+    admin_pw_new = st.text_input("Set Admin Password", type="password", key="new_pw")
+    if st.button("✨ Create Tournament"):
+        if new_t and new_t not in tournament_list and admin_pw_new:
+            init_data = {
+                "players": [{"name": f"Player {i+1}", "img": ""} for i in range(8)],
+                "courts": ["Court 1", "Court 2"],
+                "format": "Single Elimination",
+                "bracket": None,
+                "winners": {},
+                "scores": {},
+                "locked": False,
+                "admin_password": admin_pw_new,
+                "last_sync": "Never"
+            }
+            new_row = pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])
+            if save_db(pd.concat([df_db, new_row], ignore_index=True)):
+                st.success(f"Tournament **{new_t}** created! Password set.")
+                st.rerun()
+        else:
+            st.warning("Enter unique name and password")
+
+# ── Tournament selection ──
 if not tournament_list:
-    st.warning("No tournaments available yet. Create one in the sidebar.")
+    st.markdown("### No tournaments yet")
+    st.info("Create your first tournament in the sidebar (left panel).")
     st.stop()
 
 default_index = 0 if len(tournament_list) == 1 else None
@@ -200,35 +228,8 @@ if selected_t:
         if t_data.get("players") and isinstance(t_data["players"][0], str):
             t_data["players"] = [{"name": p, "img": ""} for p in t_data["players"]]
 
-        # ── Sidebar: Create always visible, edit protected ──
+        # ── Sidebar: Admin login for editing ──
         with st.sidebar:
-            st.header("Admin Desk")
-
-            # Create new tournament – always visible
-            st.subheader("Create New Tournament")
-            new_t = st.text_input("Tournament Name", key="new_t_name")
-            admin_pw_new = st.text_input("Set Admin Password", type="password", key="new_pw")
-            if st.button("✨ Create Tournament"):
-                if new_t and new_t not in tournament_list and admin_pw_new:
-                    init_data = {
-                        "players": [{"name": f"Player {i+1}", "img": ""} for i in range(8)],
-                        "courts": ["Court 1", "Court 2"],
-                        "format": "Single Elimination",
-                        "bracket": None,
-                        "winners": {},
-                        "scores": {},
-                        "locked": False,
-                        "admin_password": admin_pw_new,
-                        "last_sync": "Never"
-                    }
-                    new_row = pd.DataFrame([{"Tournament": new_t, "Data": str(init_data)}])
-                    if save_db(pd.concat([df_db, new_row], ignore_index=True)):
-                        st.success(f"Tournament **{new_t}** created! Password set.")
-                        st.rerun()
-                else:
-                    st.warning("Enter unique name and password")
-
-            # Admin login for editing current tournament
             st.markdown("---")
             st.subheader("Edit Current Tournament")
             correct_pw = t_data.get("admin_password", "")
@@ -244,11 +245,6 @@ if selected_t:
                         st.rerun()
                     else:
                         st.error("Incorrect password")
-            else:
-                st.success("Editing mode active")
-                if st.button("Logout Editing"):
-                    st.session_state.setup_authorized = False
-                    st.rerun()
 
         # ── Main tabs ──
         tab_progress, tab_order = st.tabs(["📊 PROGRESS", "📅 ORDER OF PLAY"])
@@ -260,6 +256,7 @@ if selected_t:
             if t_data.get("bracket") is None:
                 st.info("No bracket generated yet. (Admin can generate via sidebar)")
             else:
+                # Clean stale winners
                 valid_names = {p["name"] for p in t_data["players"]} | {"BYE"}
                 to_remove = [k for k, v in t_data["winners"].items() if v not in valid_names and v is not None]
                 for k in to_remove:
@@ -447,7 +444,7 @@ if selected_t:
                         </div>
                         """, unsafe_allow_html=True)
 
-        # ── Admin Setup Panel (only in main area when logged in) ──
+        # ── Admin Setup Panel (only when logged in) ──
         if st.session_state.setup_authorized:
             st.markdown("---")
             st.subheader(f"Setup for {selected_t} (Admin Mode)")
