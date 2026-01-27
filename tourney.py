@@ -61,55 +61,6 @@ st.markdown("""
         background: linear-gradient(90deg, #22c55e, #16a34a) !important;
         border: none;
     }
-    .stButton > button[kind="secondary"] {
-        background: #1e293b !important;
-        border: 1px solid #475569;
-        color: #e2e8f0;
-    }
-    .format-card {
-        padding: 16px;
-        border-radius: 12px;
-        margin-bottom: 16px;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: center;
-    }
-    .format-card.selected {
-        border: 2px solid #4ade80;
-        background: rgba(74, 222, 128, 0.15);
-        box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
-    }
-    .format-card:not(.selected) {
-        border: 1px solid #4b5563;
-        background: rgba(30, 41, 59, 0.7);
-    }
-    .format-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-    }
-    .champ-container {
-        text-align: center;
-        background: linear-gradient(45deg, #ca8a04, #fbbf24) !important;
-        padding: 40px;
-        border-radius: 20px;
-        border: 3px solid #ffd700;
-        margin: 20px 0;
-        box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
-        color: #0f172a !important;
-    }
-    .champ-avatar {
-        width: 150px; height: 150px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 5px solid #0f172a;
-        margin-bottom: 15px;
-    }
-    .champ-name {
-        color: #0f172a;
-        font-size: 2.5em;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
     .match-card {
         background: rgba(30, 41, 59, 0.9);
         border: 1px solid #475569;
@@ -151,15 +102,6 @@ st.markdown("""
         vertical-align: middle;
         margin-right: 10px;
     }
-    .score-badge {
-        background: #4ade80;
-        color: #001e5c;
-        padding: 4px 12px;
-        border-radius: 6px;
-        font-weight: bold;
-        font-size: 1em;
-        margin-top: 8px;
-    }
     .vs-divider {
         color: rgba(255,255,255,0.4);
         font-style: italic;
@@ -178,6 +120,34 @@ st.markdown("""
         color: #4ade80;
         margin-bottom: 10px;
         font-weight: bold;
+    }
+    /* Radio improvements */
+    div.row-widget.stRadio > div {
+        flex-direction: row;
+        justify-content: space-around;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    div.row-widget.stRadio > div > label {
+        background: #1e293b;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        padding: 12px 16px;
+        flex: 1 1 180px;
+        text-align: center;
+        transition: all 0.2s;
+        min-width: 140px;
+        cursor: pointer;
+    }
+    div.row-widget.stRadio > div > label[data-checked="true"] {
+        background: rgba(74, 222, 128, 0.25) !important;
+        border-color: #4ade80 !important;
+        box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
+    }
+    div.row-widget.stRadio > div > label > div[data-testid="stCaption"] {
+        color: #94a3b8;
+        font-size: 0.85rem;
+        margin-top: 6px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -274,56 +244,71 @@ if selected_t != "-- Select --":
     if not row.empty:
         t_data = ast.literal_eval(row["Data"].values[0])
 
-        for key in ["scores", "winners", "players", "courts", "format", "locked", "bracket"]:
-            if key not in t_data:
-                t_data[key] = {} if key in ["scores", "winners"] else [] if key in ["players", "courts"] else "Single Elimination" if key == "format" else False if key == "locked" else None
+        # Ensure keys exist
+        defaults = {
+            "scores": {}, "winners": {}, "players": [], "courts": ["Court 1"],
+            "format": "Single Elimination", "locked": False, "bracket": None
+        }
+        for k, v in defaults.items():
+            if k not in t_data:
+                t_data[k] = v
 
-        if isinstance(t_data["players"][0], str):
+        if isinstance(t_data["players"][0], str) if t_data["players"] else False:
             t_data["players"] = [{"name": p, "img": ""} for p in t_data["players"]]
 
         tab1, tab2, tab3 = st.tabs(["⚙️ SETUP", "📅 ORDER OF PLAY", "📊 PROGRESS"])
 
         with tab1:
-            # Lock toggle - top right
-            col1, col2 = st.columns([6, 1])
-            with col2:
-                t_data["locked"] = st.toggle("🔒 Lock", value=t_data.get("locked", False))
+            # Lock toggle
+            col_lock, _ = st.columns([1, 5])
+            with col_lock:
+                t_data["locked"] = st.toggle("🔒 Lock editing", value=t_data.get("locked", False))
 
-            st.markdown("<h2 style='text-align: center; color: #e2e8f0; margin-bottom: 1.5rem;'>Tournament Setup</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #e2e8f0;'>Tournament Setup</h2>", unsafe_allow_html=True)
 
-            # Format selection - card style
-            st.markdown("### Format")
+            st.markdown("### Tournament Format")
+
             format_options = [
-                ("Single Elimination", "Classic knockout – one loss and you're out", "⚡"),
-                ("Round Robin", "Everyone plays everyone – maximum matches", "🔄"),
-                ("Double Elimination", "Second chance bracket – two losses to exit", "🔄🔄"),
-                ("Group Stage + Knockout", "Groups → finals – balanced & exciting", "🏆")
+                "Single Elimination",
+                "Round Robin",
+                "Double Elimination",
+                "Group Stage + Knockout"
             ]
 
-            cols = st.columns(2)
-            current_format = t_data.get("format", "Single Elimination")
+            format_captions = [
+                "One loss → out",
+                "Everyone vs everyone",
+                "Two losses → out",
+                "Groups → finals"
+            ]
 
-            for i, (name, desc, emoji) in enumerate(format_options):
-                with cols[i % 2]:
-                    is_selected = current_format == name
-                    card_class = "format-card selected" if is_selected else "format-card"
-                    st.markdown(f"<div class='{card_class}'>", unsafe_allow_html=True)
-                    if st.button(
-                        f"{emoji} {name}",
-                        key=f"fmt_{name}_{selected_t}",
-                        use_container_width=True,
-                        type="primary" if is_selected else "secondary",
-                        disabled=t_data["locked"]
-                    ):
-                        if not t_data["locked"]:
-                            t_data["format"] = name
-                            st.rerun()
-                    st.markdown(f"<div style='color:#94a3b8; font-size:0.9rem;'>{desc}</div>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
+            format_descriptions = {
+                "Single Elimination": "Classic knockout bracket. Players are eliminated after **one loss**. Fast-paced, works best with 4–32 players (byes added automatically if needed). Ideal for quick tournaments.",
+                "Round Robin": "Everyone plays against everyone else. Guarantees the **most matches** per player and is the fairest format. Best for small groups (4–12 players) where you want maximum playtime.",
+                "Double Elimination": "Players need **two losses** to be eliminated. Includes a winner bracket and a loser bracket (second chance). More games, higher excitement. (Winner bracket only in current version)",
+                "Group Stage + Knockout": "Players divided into small groups for round-robin play, then top performers advance to a knockout stage. Great balance of fairness and dramatic finals. Perfect for 8–40 players."
+            }
+
+            selected_format = st.radio(
+                "Select format",
+                options=format_options,
+                index=format_options.index(t_data.get("format", "Single Elimination")),
+                horizontal=True,
+                captions=format_captions,
+                key=f"format_radio_{selected_t}",
+                disabled=t_data["locked"]
+            )
+
+            # Update stored value
+            t_data["format"] = selected_format
+
+            # Dynamic explanation
+            with st.container(border=True):
+                st.markdown(f"**{selected_format}**")
+                st.info(format_descriptions.get(selected_format, "Select a format above"), icon="ℹ️")
 
             st.markdown("---")
 
-            # Players
             st.markdown("### Participants")
             t_data["players"] = st.data_editor(
                 t_data["players"],
@@ -338,7 +323,7 @@ if selected_t != "-- Select --":
                 }
             )
 
-            st.markdown("### Courts")
+            st.markdown("### Available Courts")
             t_data["courts"] = st.data_editor(
                 t_data["courts"],
                 num_rows="dynamic",
@@ -352,7 +337,6 @@ if selected_t != "-- Select --":
 
             st.markdown("---")
 
-            # Generate button
             if st.button(
                 "🚀 Generate Tournament",
                 type="primary",
@@ -372,15 +356,13 @@ if selected_t != "-- Select --":
                 t_data["scores"] = {}
                 df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
                 if save_db(df_db):
-                    st.success("🎾 Tournament successfully generated! Go to **ORDER OF PLAY** to view matches.")
+                    st.success("🎾 Tournament bracket generated! Switch to **ORDER OF PLAY** tab.")
                     st.balloons()
                     st.rerun()
 
         # ────────────────────────────────────────────────
-        # ORDER OF PLAY (tab2) & PROGRESS (tab3) remain mostly the same as previous version
-        # (kept graphical with avatars, cards, courts cycling, etc.)
+        # ORDER OF PLAY (tab2)
         # ────────────────────────────────────────────────
-
         with tab2:
             if not t_data.get("bracket"):
                 st.info("Generate the bracket first in the SETUP tab.")
@@ -421,10 +403,14 @@ if selected_t != "-- Select --":
                                             f"<div class='player-row'><img src='{get_p_img(match[1], t_data['players'])}' class='player-avatar'> {match[1]}</div>"
                                             f"</div>", unsafe_allow_html=True)
 
+        # ────────────────────────────────────────────────
+        # PROGRESS (tab3)
+        # ────────────────────────────────────────────────
         with tab3:
             if not t_data.get("bracket"):
                 st.info("No bracket generated yet.")
             else:
+                # Clean stale winners
                 valid_names = {p["name"] for p in t_data["players"]} | {"BYE"}
                 to_remove = [k for k, v in t_data["winners"].items() if v not in valid_names and v is not None]
                 for k in to_remove:
@@ -466,11 +452,89 @@ if selected_t != "-- Select --":
                                 with c2:
                                     t_data["scores"][k] = st.text_input("Score", value=t_data["scores"].get(k, ""), key=f"score_{k}")
 
-                # ... (rest of tab3 remains similar – group stage, knockout rounds, champion display)
+                elif t_data["format"] == "Group Stage + Knockout" and isinstance(t_data["bracket"], dict):
+                    st.subheader("Group Stage Progress")
+                    for g_idx, group_players in enumerate(t_data["bracket"].get("groups", [])):
+                        with st.expander(f"Group {g_idx+1} – {', '.join(group_players)}"):
+                            wins = {p: 0 for p in group_players}
+                            for r_idx, rnd in enumerate(t_data["bracket"]["group_matches"][g_idx]):
+                                for m_idx, match in enumerate(rnd):
+                                    if len(match) < 2 or match[1] == "BYE": continue
+                                    k = f"group{g_idx}_r{r_idx}_m{m_idx}_{selected_t}"
+                                    saved = t_data["winners"].get(k)
+                                    options = [None, match[0], match[1]]
+                                    idx = options.index(saved) if saved in options else 0
+                                    st.markdown(f"<div class='match-card'>"
+                                                f"<div class='player-row'><img src='{get_p_img(match[0], t_data['players'])}' class='mini-avatar'> **{match[0]}**</div>"
+                                                f"<div class='vs-divider'>vs</div>"
+                                                f"<div class='player-row'><img src='{get_p_img(match[1], t_data['players'])}' class='mini-avatar'> **{match[1]}**</div>"
+                                                f"</div>", unsafe_allow_html=True)
+                                    c1, c2 = st.columns([3, 4])
+                                    with c1:
+                                        sel = st.selectbox("Winner", options, index=idx, key=f"win_{k}")
+                                        t_data["winners"][k] = sel
+                                        if sel: wins[sel] += 1
+                                    with c2:
+                                        t_data["scores"][k] = st.text_input("Score", value=t_data["scores"].get(k, ""), key=f"score_{k}")
+                            st.dataframe(
+                                pd.DataFrame([{"Avatar": get_p_img(p, t_data["players"]), "Player": p, "Wins": w} for p, w in wins.items()])
+                                  .sort_values("Wins", ascending=False),
+                                hide_index=True,
+                                use_container_width=True,
+                                column_config={"Avatar": st.column_config.ImageColumn(width="small")}
+                            )
+
+                    st.info("Knockout bracket generation from group results – coming soon")
+
+                else:
+                    bracket_data = t_data["bracket"] if isinstance(t_data["bracket"], list) else t_data["bracket"].get("winner", [])
+                    curr_round = bracket_data
+                    round_num = 1
+                    while len(curr_round) > 0:
+                        st.markdown(f"#### Round {round_num}")
+                        cols = st.columns(max(1, min(4, len(curr_round))))
+                        next_round = []
+                        for i, match in enumerate(curr_round):
+                            with cols[i % len(cols)]:
+                                if match[1] == "BYE":
+                                    st.success(f"→ {match[0]} advances (BYE)")
+                                    next_round.append(match[0])
+                                elif "TBD" in match:
+                                    st.caption("Waiting...")
+                                    next_round.append("TBD")
+                                else:
+                                    k = f"r{round_num}_m{i}_{selected_t}"
+                                    st.markdown(f"<div class='match-card'>"
+                                                f"<div class='player-row'><img src='{get_p_img(match[0], t_data['players'])}' class='player-avatar'> {match[0]}</div>"
+                                                f"<div class='vs-divider'>vs</div>"
+                                                f"<div class='player-row'><img src='{get_p_img(match[1], t_data['players'])}' class='player-avatar'> {match[1]}</div>"
+                                                f"</div>", unsafe_allow_html=True)
+                                    options = [None, match[0], match[1]]
+                                    saved = t_data["winners"].get(k)
+                                    idx = options.index(saved) if saved in options else 0
+                                    sel = st.selectbox("Winner", options, index=idx, key=f"win_{k}")
+                                    t_data["winners"][k] = sel
+                                    t_data["scores"][k] = st.text_input("Score", value=t_data["scores"].get(k, ""), key=f"score_{k}")
+                                    next_round.append(sel if sel else "TBD")
+                        if len(next_round) > 1:
+                            curr_round = [next_round[j:j+2] for j in range(0, len(next_round), 2)]
+                            round_num += 1
+                            st.markdown("<div class='round-arrow'>↓ NEXT ROUND ↓</div>", unsafe_allow_html=True)
+                        else:
+                            if next_round and next_round[0] not in ["TBD", None, ""]:
+                                champion = next_round[0]
+                            break
 
                 if champion:
                     st.balloons()
-                    st.markdown(f"<div class='champ-container'><div style='font-size:1.6em;'>🏆 CHAMPION 🏆</div><img src='{get_p_img(champion, t_data['players'])}' class='champ-avatar'><div class='champ-name'>{champion}</div></div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div class='champ-container'>"
+                        f"<div style='font-size:1.6em;'>🏆 CHAMPION 🏆</div>"
+                        f"<img src='{get_p_img(champion, t_data['players'])}' class='champ-avatar'>"
+                        f"<div class='champ-name'>{champion}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
 
                 if st.button("💾 SAVE PROGRESS", type="primary", use_container_width=True):
                     t_data["last_sync"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
