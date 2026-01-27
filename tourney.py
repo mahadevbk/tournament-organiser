@@ -8,108 +8,78 @@ import datetime
 import re
 
 # ────────────────────────────────────────────────
-# PAGE CONFIG + FUTURISTIC FONT (Orbitron)
+# PAGE CONFIG + FONT (Orbitron applied globally)
 # ────────────────────────────────────────────────
 st.set_page_config(page_title="Tennis Tournament Organiser", layout="wide", page_icon="🎾")
 
 st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&display=swap" rel="stylesheet">
 <style>
-    .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    /* Force Orbitron font across the entire app */
+    html, body, [data-testid="stAppViewContainer"], 
+    [data-testid="stApp"], .stApp, .st-emotion-cache-1wivap2, 
+    .st-emotion-cache-13ln4jf, .st-emotion-cache-1r6slb0,
+    .st-emotion-cache-yw8pof, .st-emotion-cache-1y4p8pa {
         font-family: 'Orbitron', sans-serif !important;
     }
-    h1, h2, h3, h4, h5, h6 {
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 700;
+
+    /* Headings & markdown */
+    h1, h2, h3, h4, h5, h6, 
+    [data-testid="stMarkdownContainer"] h1,
+    [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stMarkdownContainer"] h3,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] div,
+    [data-testid="stMarkdownContainer"] span {
+        font-family: 'Orbitron', sans-serif !important;
     }
-    .stTabs [data-baseweb="tab"] {
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 500;
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab"],
+    .stTabs [data-baseweb="tab"] > div,
+    .stTabs [data-baseweb="tab-panel"] {
+        font-family: 'Orbitron', sans-serif !important;
     }
-    .stButton > button {
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 600;
+
+    /* Buttons */
+    button.kindsbutton, .stButton > button,
+    [kind="primary"] > button, [kind="secondary"] > button {
+        font-family: 'Orbitron', sans-serif !important;
+        font-weight: 600 !important;
     }
-    .match-card {
-        background: rgba(30, 41, 59, 0.9);
-        border: 1px solid #475569;
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        transition: all 0.2s;
-        text-align: center;
-        width: 100%;
+
+    /* Inputs, text areas, selectboxes, radio, etc. */
+    input, textarea, select,
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > select,
+    .stNumberInput > div > div > input,
+    .stRadio > div > label,
+    .stCheckbox > div > label {
+        font-family: 'Orbitron', sans-serif !important;
     }
-    .match-card:hover {
-        transform: translateY(-6px);
-        box-shadow: 0 10px 25px rgba(34, 197, 94, 0.3);
+
+    /* Tables / Dataframes */
+    .stDataFrame, .dataframe, td, th,
+    [data-testid="stDataFrame"] *, 
+    [data-testid="stTable"] * {
+        font-family: 'Orbitron', sans-serif !important;
     }
-    .player-row {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 15px;
-        color: white;
-        margin: 8px 0;
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] *,
+    .sidebar .sidebar-content * {
+        font-family: 'Orbitron', sans-serif !important;
     }
-    .player-avatar {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid #4ade80;
+
+    /* Match cards & custom elements */
+    .match-card, .player-row, .vs-divider, .court-header, .round-arrow {
+        font-family: 'Orbitron', sans-serif !important;
     }
-    .mini-avatar {
-        width: 35px;
-        height: 35px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 1px solid #4ade80;
-        vertical-align: middle;
-        margin: 0 6px;
-    }
-    .vs-divider {
-        color: rgba(255,255,255,0.4);
-        font-style: italic;
-        font-size: 1.1em;
-        margin: 8px 0;
-        text-align: center;
-    }
-    .round-arrow {
-        text-align: center;
-        color: #4ade80;
-        font-size: 2.5em;
-        margin: 30px 0;
-        font-weight: bold;
-    }
-    .court-header {
-        font-size: 1.2em;
-        color: #4ade80;
-        margin-bottom: 10px;
-        font-weight: bold;
-    }
-    /* Radio improvements */
-    div.row-widget.stRadio > div {
-        flex-direction: row;
-        justify-content: space-around;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-    div.row-widget.stRadio > div > label {
-        background: #1e293b;
-        border: 1px solid #475569;
-        border-radius: 8px;
-        padding: 12px 16px;
-        flex: 1 1 180px;
-        text-align: center;
-        min-width: 140px;
-    }
-    div.row-widget.stRadio > div > label[data-checked="true"] {
-        background: rgba(74, 222, 128, 0.25) !important;
-        border-color: #4ade80 !important;
-        box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
+
+    /* General fallback */
+    * {
+        font-family: 'Orbitron', sans-serif !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -149,7 +119,7 @@ def save_db(df):
         return False
 
 # ────────────────────────────────────────────────
-# GENERATORS (unchanged)
+# GENERATORS
 # ────────────────────────────────────────────────
 def generate_bracket(participants):
     names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
@@ -370,7 +340,7 @@ if selected_t != "-- Select --":
                                         f"<div class='player-row'><img src='{get_p_img(m[1], t_data['players'])}' class='player-avatar'> {m[1]}</div>"
                                         f"</div>", unsafe_allow_html=True)
 
-        # ────── PROGRESS TAB ────── (fixed centering)
+        # ────── PROGRESS TAB ──────
         with tab3:
             st.subheader("Tournament Progress")
 
