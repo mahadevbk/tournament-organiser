@@ -18,7 +18,7 @@ st.markdown("""
     html, body, [data-testid="stAppViewContainer"], .stApp, .st-emotion-cache-* {
         font-family: 'Audiowide', sans-serif !important;
     }
-    h1, h2, h3, h4, h5, h6, [data-testid="stMarkdownContainer"] * {
+    h1, h2, h3, h4, h5, h6 {
         font-family: 'Audiowide', sans-serif !important;
     }
     .stTabs [data-baseweb="tab"] {
@@ -46,10 +46,6 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(0,0,0,0.35);
         text-align: center;
     }
-    .match-card:hover {
-        transform: translateY(-6px);
-        box-shadow: 0 10px 25px rgba(34, 197, 94, 0.3);
-    }
     .player-row {
         display: flex;
         align-items: center;
@@ -62,7 +58,6 @@ st.markdown("""
         border-radius: 50%;
         object-fit: cover;
         border: 3px solid #4ade80;
-        box-shadow: 0 2px 10px rgba(74,222,128,0.4);
     }
     .mini-avatar {
         width: 40px; height: 40px;
@@ -125,7 +120,7 @@ def save_db(df):
         return False
 
 # ────────────────────────────────────────────────
-# GENERATORS (unchanged)
+# GENERATORS
 # ────────────────────────────────────────────────
 def generate_bracket(participants):
     names = [p['name'] if isinstance(p, dict) else str(p) for p in participants]
@@ -166,19 +161,18 @@ st.title("🎾 Tennis Tournament Organiser")
 df_db = load_db()
 tournament_list = df_db["Tournament"].dropna().unique().tolist()
 
-# ── Tournament selection (first thing user sees) ──
+# Tournament selection dropdown (first thing user sees)
 if not tournament_list:
-    st.warning("No tournaments found in Google Sheets yet.")
+    st.warning("No tournaments available yet.")
     st.stop()
 
 # Auto-select if only one tournament
-default_t = tournament_list[0] if len(tournament_list) == 1 else None
-
+default_index = 0 if len(tournament_list) == 1 else None
 selected_t = st.selectbox(
-    "Select a tournament to view",
+    "Select a tournament",
     options=tournament_list,
-    index=0 if default_t is None else tournament_list.index(default_t),
-    key="tournament_select"
+    index=default_index,
+    key="tournament_select_main"
 )
 
 if selected_t:
@@ -206,7 +200,7 @@ if selected_t:
                 st.session_state.setup_authorized = False
 
             if not st.session_state.setup_authorized:
-                entered_pw = st.text_input("Admin Password", type="password", key=f"pw_sidebar_{selected_t}")
+                entered_pw = st.text_input("Admin Password", type="password", key=f"pw_{selected_t}")
                 if st.button("Login as Admin"):
                     if entered_pw == correct_pw:
                         st.session_state.setup_authorized = True
@@ -220,8 +214,8 @@ if selected_t:
                     st.session_state.setup_authorized = False
                     st.rerun()
 
-                # Setup section – only visible to admin
-                st.subheader("Setup (Admin)")
+                # ── Setup section (only for admin) ──
+                st.subheader("Tournament Setup (Admin)")
                 t_data["locked"] = st.toggle("Lock tournament", value=t_data.get("locked", False))
 
                 st.markdown("### Format")
@@ -232,7 +226,7 @@ if selected_t:
                     index=format_options.index(t_data.get("format", "Single Elimination")),
                     horizontal=True,
                     disabled=t_data["locked"],
-                    key=f"admin_format_{selected_t}"
+                    key=f"admin_fmt_{selected_t}"
                 )
                 t_data["format"] = fmt
 
@@ -254,7 +248,7 @@ if selected_t:
                     disabled=t_data["locked"]
                 )
 
-                if st.button("🚀 Generate / Regenerate Bracket", type="primary", disabled=t_data["locked"]):
+                if st.button("🚀 Generate Bracket", type="primary", disabled=t_data["locked"]):
                     if t_data["format"] == "Single Elimination":
                         t_data["bracket"] = generate_bracket(t_data["players"])
                     elif t_data["format"] == "Round Robin":
@@ -277,25 +271,24 @@ if selected_t:
         # ── Main tabs: Progress first, then Order of Play ──
         tab_progress, tab_order = st.tabs(["📊 PROGRESS", "📅 ORDER OF PLAY"])
 
-        # ────── PROGRESS (default view) ──────
+        # ────── PROGRESS (first tab) ──────
         with tab_progress:
             st.subheader(f"Progress: {selected_t}")
-
             if t_data.get("bracket") is None:
-                st.info("No bracket generated yet. (Admin can create one via sidebar)")
+                st.info("No bracket generated yet. (Admin can generate via sidebar)")
             else:
-                # Your existing progress logic here (wins, leaderboard, rounds, champion, save button)
-                # ... (insert your full progress code from earlier versions)
-                # For brevity, assuming you have it working – keep your match cards, leaderboard, etc.
-                pass
+                # Example progress content (replace with your full progress logic)
+                st.success("Bracket loaded")
+                st.json(t_data.get("bracket"))  # temporary preview - remove later
+                # Add your leaderboard, match inputs, champion display here...
 
         # ────── ORDER OF PLAY ──────
         with tab_order:
             st.subheader(f"Order of Play: {selected_t}")
-
             if t_data.get("bracket") is None:
                 st.info("No bracket generated yet.")
             else:
-                # Your existing order of play code (cleaned layout with match cards)
-                # ... (insert your full order of play code)
-                pass
+                # Example order of play content (replace with your full logic)
+                st.success("Matches loaded")
+                st.json(t_data.get("bracket"))  # temporary preview - remove later
+                # Add your match cards, court assignment here...
