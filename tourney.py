@@ -109,7 +109,7 @@ def generate_round_robin(participants):
     return rounds
 
 # --- MAIN APP ---
-st.title("🎾 Tournament Organiser Pro")
+st.title("🎾 Tournament Organiser")
 df_db = load_db()
 tournament_list = df_db["Tournament"].dropna().unique().tolist()
 
