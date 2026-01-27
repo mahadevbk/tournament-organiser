@@ -244,79 +244,8 @@ if selected_t:
                         st.rerun()
                     else:
                         st.error("Incorrect password")
-            else:
-                st.success("Editing mode active")
-                if st.button("Logout Editing"):
-                    st.session_state.setup_authorized = False
-                    st.rerun()
 
-                t_data["locked"] = st.toggle("Lock tournament", value=t_data.get("locked", False))
-
-                st.markdown("### Format")
-                format_options = ["Single Elimination", "Round Robin", "Double Elimination", "Group Stage + Knockout"]
-                fmt = st.radio(
-                    "Change format",
-                    options=format_options,
-                    index=format_options.index(t_data.get("format", "Single Elimination")),
-                    horizontal=True,
-                    disabled=t_data["locked"],
-                    key=f"admin_fmt_{selected_t}"
-                )
-                t_data["format"] = fmt
-
-                st.markdown("### Participants")
-                t_data["players"] = st.data_editor(
-                    t_data["players"],
-                    num_rows="dynamic",
-                    disabled=t_data["locked"],
-                    column_config={
-                        "img": st.column_config.ImageColumn("Photo"),
-                        "name": st.column_config.TextColumn("Name", required=True)
-                    }
-                )
-
-                st.markdown("### Courts")
-                t_data["courts"] = st.data_editor(
-                    t_data["courts"],
-                    num_rows="dynamic",
-                    disabled=t_data["locked"]
-                )
-
-                if st.button("🚀 Generate / Regenerate Bracket", type="primary", disabled=t_data["locked"]):
-                    if t_data["format"] == "Single Elimination":
-                        t_data["bracket"] = generate_bracket(t_data["players"])
-                    elif t_data["format"] == "Round Robin":
-                        t_data["bracket"] = generate_round_robin(t_data["players"])
-                    elif t_data["format"] == "Double Elimination":
-                        t_data["bracket"] = {"winner": generate_bracket(t_data["players"]), "loser": []}
-                    elif t_data["format"] == "Group Stage + Knockout":
-                        t_data["bracket"] = generate_groups(t_data["players"])
-
-                    t_data["winners"] = {}
-                    t_data["scores"] = {}
-
-                    df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
-                    if save_db(df_db):
-                        df_db = load_db()
-                        st.success("Bracket generated!")
-                        st.balloons()
-                        st.rerun()
-
-                # Delete tournament
-                st.markdown("---")
-                st.subheader("Danger Zone")
-                delete_confirm = st.checkbox("Confirm: permanently delete this tournament")
-                if delete_confirm and st.button("🗑️ Delete Tournament", type="primary"):
-                    df_db = df_db[df_db["Tournament"] != selected_t]
-                    if save_db(df_db):
-                        st.success(f"Tournament **{selected_t}** deleted!")
-                        if "tournament_select_main" in st.session_state:
-                            del st.session_state["tournament_select_main"]
-                        st.rerun()
-                    else:
-                        st.error("Delete failed – check connection")
-
-        # ── Main tabs: Progress first, Order of Play second ──
+        # ── Main tabs ──
         tab_progress, tab_order = st.tabs(["📊 PROGRESS", "📅 ORDER OF PLAY"])
 
         # ────── PROGRESS ──────
@@ -513,3 +442,85 @@ if selected_t:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+
+        # ── Admin Setup Panel (only shown in main area when logged in) ──
+        if st.session_state.setup_authorized:
+            st.markdown("---")
+            st.subheader(f"Setup for {selected_t} (Admin Mode)")
+            t_data["locked"] = st.toggle("Lock tournament", value=t_data.get("locked", False))
+
+            st.markdown("### Format")
+            format_options = ["Single Elimination", "Round Robin", "Double Elimination", "Group Stage + Knockout"]
+            fmt = st.radio(
+                "Change format",
+                options=format_options,
+                index=format_options.index(t_data.get("format", "Single Elimination")),
+                horizontal=True,
+                disabled=t_data["locked"],
+                key=f"admin_fmt_{selected_t}"
+            )
+            t_data["format"] = fmt
+
+            # Dynamic format explanation
+            descriptions = {
+                "Single Elimination": "Classic knockout. One loss = eliminated. Fast & simple.",
+                "Round Robin": "Everyone plays everyone. Most matches, very fair.",
+                "Double Elimination": "Two losses to be out. More games, second chance bracket.",
+                "Group Stage + Knockout": "Group stage → top advance to knockout. Balanced & exciting."
+            }
+            with st.container(border=True):
+                st.info(descriptions.get(fmt, ""), icon="ℹ️")
+
+            st.divider()
+
+            st.markdown("### Participants")
+            t_data["players"] = st.data_editor(
+                t_data["players"],
+                num_rows="dynamic",
+                disabled=t_data["locked"],
+                column_config={
+                    "img": st.column_config.ImageColumn("Photo"),
+                    "name": st.column_config.TextColumn("Name", required=True)
+                }
+            )
+
+            st.markdown("### Courts")
+            t_data["courts"] = st.data_editor(
+                t_data["courts"],
+                num_rows="dynamic",
+                disabled=t_data["locked"]
+            )
+
+            if st.button("🚀 Generate / Regenerate Bracket", type="primary", disabled=t_data["locked"]):
+                if t_data["format"] == "Single Elimination":
+                    t_data["bracket"] = generate_bracket(t_data["players"])
+                elif t_data["format"] == "Round Robin":
+                    t_data["bracket"] = generate_round_robin(t_data["players"])
+                elif t_data["format"] == "Double Elimination":
+                    t_data["bracket"] = {"winner": generate_bracket(t_data["players"]), "loser": []}
+                elif t_data["format"] == "Group Stage + Knockout":
+                    t_data["bracket"] = generate_groups(t_data["players"])
+
+                t_data["winners"] = {}
+                t_data["scores"] = {}
+
+                df_db.loc[df_db["Tournament"] == selected_t, "Data"] = str(t_data)
+                if save_db(df_db):
+                    df_db = load_db()
+                    st.success("Bracket generated!")
+                    st.balloons()
+                    st.rerun()
+
+            # Delete tournament
+            st.markdown("---")
+            st.subheader("Danger Zone")
+            delete_confirm = st.checkbox("Confirm: permanently delete this tournament")
+            if delete_confirm and st.button("🗑️ Delete Tournament", type="primary"):
+                df_db = df_db[df_db["Tournament"] != selected_t]
+                if save_db(df_db):
+                    st.success(f"Tournament **{selected_t}** deleted!")
+                    if "tournament_select_main" in st.session_state:
+                        del st.session_state["tournament_select_main"]
+                    st.rerun()
+                else:
+                    st.error("Delete failed – check connection")
